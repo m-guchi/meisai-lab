@@ -1,0 +1,173 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+// --- NextAuth.js / Auth.js v5 ---
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String? @db.Text
+  access_token      String? @db.Text
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String? @db.Text
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model VerificationToken {
+  identifier String
+  token      String
+  expires    DateTime
+
+  @@unique([identifier, token])
+}
+
+model User {
+  id            String    @id @default(cuid())
+  email         String    @unique
+  emailVerified DateTime?
+  name          String?
+  image         String?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  accounts                Account[]
+  sessions                Session[]
+  salaries                Salary[]
+  bonuses                 Bonus[]
+  items                   Item[]
+  taxSettings             TaxSetting[]
+  deductions              Deduction[]
+  taxCalculationOverrides TaxCalculationOverride[]
+}
+
+// --- Application models ---
+
+model Salary {
+  id     String @id @default(cuid())
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  salaryDate  DateTime // 支給日
+  grossSalary Decimal  @db.Decimal(10, 2) // 支給額
+  netSalary   Decimal  @db.Decimal(10, 2) // 手取額
+  data        Json // { "baseGrossSalary": 300000, "overtime": 50000, "healthInsurance": -12000, ... }
+  memo        String?  @db.Text
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime? // soft delete
+
+  @@unique([userId, salaryDate])
+  @@index([userId, salaryDate])
+  @@index([userId, deletedAt])
+}
+
+model Bonus {
+  id     String @id @default(cuid())
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  bonusDate DateTime
+  amount    Decimal  @db.Decimal(10, 2)
+  data      Json
+  memo      String?  @db.Text
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  @@unique([userId, bonusDate])
+  @@index([userId, bonusDate])
+}
+
+model Item {
+  id     String @id @default(cuid())
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  itemName     String // "基本給", "残業手当" など
+  itemType     String // "earning"(支給) / "otherEarning"(その他支給) / "otherTaxable"(その他(課税処理)) / "statutoryDeduction"(法定控除) / "deduction"(控除)
+  scope        String  @default("both") // "salary" / "bonus" / "both"
+  isTaxable    Boolean @default(true) // 支給/その他支給項目が課税対象かどうか（通勤手当等の非課税支給を区別する）
+  displayOrder Int     @default(0)
+  isActive     Boolean @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([userId, itemName])
+}
+
+model TaxSetting {
+  id     String @id @default(cuid())
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  effectiveFrom           DateTime // 適用開始年月（当該月の1日を保持）
+  healthInsuranceRate     Decimal  @default(9.15) @db.Decimal(5, 2)
+  pensionRate             Decimal  @default(9.15) @db.Decimal(5, 2)
+  employmentInsuranceRate Decimal  @default(0.60) @db.Decimal(5, 2)
+  incomeRateTaxFormula    String?  @db.Text // Phase 2以降
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([userId, effectiveFrom])
+}
+
+model Deduction {
+  id     String @id @default(cuid())
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  deductionType String // "lifeInsuranceGeneral" / "lifeInsuranceCareMedical" / "lifeInsurancePension" / "furusatoNozei"
+  amount        Decimal @db.Decimal(10, 2)
+  year          Int
+  note          String? @db.Text
+
+  createdAt DateTime @default(now())
+
+  @@unique([userId, year, deductionType])
+  @@index([userId, year])
+}
+
+// 住民税計算過程（annualTax.ts の各ステップ）の手入力による上書き値
+model TaxCalculationOverride {
+  id     String @id @default(cuid())
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  year   Int
+  field  String // "annualGrossIncome" / "employmentIncome" など、計算過程の項目キー
+  amount Decimal @db.Decimal(10, 2)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([userId, year, field])
+  @@index([userId, year])
+}
