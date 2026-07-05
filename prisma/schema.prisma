@@ -1,0 +1,152 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+// --- NextAuth.js / Auth.js v5 ---
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String? @db.Text
+  access_token      String? @db.Text
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String? @db.Text
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model VerificationToken {
+  identifier String
+  token      String
+  expires    DateTime
+
+  @@unique([identifier, token])
+}
+
+model User {
+  id            String    @id @default(cuid())
+  email         String    @unique
+  emailVerified DateTime?
+  name          String?
+  image         String?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  accounts    Account[]
+  sessions    Session[]
+  salaries    Salary[]
+  bonuses     Bonus[]
+  items       Item[]
+  taxSettings TaxSetting[]
+  deductions  Deduction[]
+}
+
+// --- Application models ---
+
+model Salary {
+  id     String @id @default(cuid())
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  salaryDate  DateTime // 支給日
+  grossSalary Decimal  @db.Decimal(10, 2) // 支給額
+  netSalary   Decimal  @db.Decimal(10, 2) // 手取額
+  data        Json // { "baseGrossSalary": 300000, "overtime": 50000, "healthInsurance": -12000, ... }
+  memo        String?  @db.Text
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime? // soft delete
+
+  @@unique([userId, salaryDate])
+  @@index([userId, salaryDate])
+  @@index([userId, deletedAt])
+}
+
+model Bonus {
+  id     String @id @default(cuid())
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  bonusType String // "夏季" / "冬季" / "特別"
+  bonusDate DateTime
+  amount    Decimal  @db.Decimal(10, 2)
+  data      Json
+  memo      String?  @db.Text
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  @@unique([userId, bonusDate, bonusType])
+  @@index([userId, bonusDate])
+}
+
+model Item {
+  id     String @id @default(cuid())
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  itemName     String // "基本給", "残業手当" など
+  itemType     String // "earning" / "deduction"
+  displayOrder Int     @default(0)
+  isActive     Boolean @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([userId, itemName])
+}
+
+model TaxSetting {
+  id     String @id @default(cuid())
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  year                 Int // 2024, 2025 等
+  healthInsuranceRate  Decimal @default(9.15) @db.Decimal(5, 2)
+  pensionRate          Decimal @default(9.15) @db.Decimal(5, 2)
+  incomeRateTaxFormula String? @db.Text // Phase 2以降
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([userId, year])
+}
+
+model Deduction {
+  id     String @id @default(cuid())
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  deductionType String // "life_insurance" / "furusato_nozei" / "other"
+  amount        Decimal @db.Decimal(10, 2)
+  year          Int
+  note          String? @db.Text
+
+  createdAt DateTime @default(now())
+
+  @@index([userId, year])
+}

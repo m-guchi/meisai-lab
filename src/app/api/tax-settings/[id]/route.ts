@@ -1,0 +1,23 @@
+import { requireUserId } from "@/lib/auth-user";
+import { db } from "@/lib/db";
+import { UpdateTaxSettingSchema } from "@/lib/validators";
+
+type Params = { params: Promise<{ id: string }> };
+
+export async function PUT(request: Request, { params }: Params) {
+  const userId = await requireUserId();
+  if (!userId) return Response.json({ error: "Unauthorized" }, { status: 401 });
+
+  const { id } = await params;
+  const body = await request.json();
+  const parsed = UpdateTaxSettingSchema.safeParse(body);
+  if (!parsed.success) {
+    return Response.json({ error: parsed.error.flatten() }, { status: 400 });
+  }
+
+  const existing = await db.taxSetting.findFirst({ where: { id, userId } });
+  if (!existing) return Response.json({ error: "Not Found" }, { status: 404 });
+
+  const taxSetting = await db.taxSetting.update({ where: { id }, data: parsed.data });
+  return Response.json(taxSetting);
+}

@@ -1,0 +1,44 @@
+import type { Metadata } from "next";
+import localFont from "next/font/local";
+import { ThemeProvider } from "@/components/theme-provider";
+import { Toaster } from "@/components/ui/sonner";
+import "./globals.css";
+
+// next/font/google 経由の取得がこの開発環境のネットワーク事情で失敗するため、
+// フォントファイルを事前ダウンロードしてセルフホストしている。
+const mplusRounded = localFont({
+  variable: "--font-mplus-rounded",
+  src: [
+    { path: "./fonts/mplus-rounded-1c-400.ttf", weight: "400", style: "normal" },
+    { path: "./fonts/mplus-rounded-1c-500.ttf", weight: "500", style: "normal" },
+    { path: "./fonts/mplus-rounded-1c-700.ttf", weight: "700", style: "normal" },
+    { path: "./fonts/mplus-rounded-1c-800.ttf", weight: "800", style: "normal" },
+  ],
+  display: "swap",
+});
+
+export const metadata: Metadata = {
+  title: "meisai-lab",
+  description: "給与・賞与管理アプリ",
+};
+
+export default function RootLayout({
+  children,
+}: Readonly<{
+  children: React.ReactNode;
+}>) {
+  return (
+    <html
+      lang="ja"
+      className={`${mplusRounded.variable} h-full antialiased`}
+      suppressHydrationWarning
+    >
+      <body className="min-h-full flex flex-col">
+        <ThemeProvider attribute="class" defaultTheme="system" enableSystem disableTransitionOnChange>
+          {children}
+          <Toaster />
+        </ThemeProvider>
+      </body>
+    </html>
+  );
+}
