@@ -6,25 +6,44 @@ import { db } from "@/lib/db";
 import { SalaryTrendChart } from "@/components/Charts/SalaryTrendChart";
 import { DeductionChart } from "@/components/Charts/DeductionChart";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { YearSelector } from "./YearSelector";
 import type { SalaryDTO } from "@/types";
 
-export default async function DashboardPage() {
+export default async function DashboardPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ year?: string }>;
+}) {
   const session = await auth();
   const userId = session?.user?.id;
   if (!userId) redirect("/auth/signin");
 
+  const { year: yearParam } = await searchParams;
   const currentYear = new Date().getFullYear();
-  const salaries = await db.salary.findMany({
-    where: {
-      userId,
-      deletedAt: null,
-      salaryDate: {
-        gte: new Date(`${currentYear}-01-01`),
-        lt: new Date(`${currentYear + 1}-01-01`),
+  const year = yearParam ? Number(yearParam) : currentYear;
+
+  const [salaries, allSalaryDates] = await Promise.all([
+    db.salary.findMany({
+      where: {
+        userId,
+        deletedAt: null,
+        salaryDate: {
+          gte: new Date(`${year}-01-01`),
+          lt: new Date(`${year + 1}-01-01`),
+        },
       },
-    },
-    orderBy: { salaryDate: "asc" },
-  });
+      orderBy: { salaryDate: "asc" },
+    }),
+    db.salary.findMany({
+      where: { userId, deletedAt: null },
+      select: { salaryDate: true },
+    }),
+  ]);
+
+  const yearsWithData = new Set(allSalaryDates.map((s) => s.salaryDate.getFullYear()));
+  yearsWithData.add(currentYear);
+  yearsWithData.add(year);
+  const availableYears = Array.from(yearsWithData).sort((a, b) => b - a);
 
   const salaryDtos = JSON.parse(JSON.stringify(salaries)) as SalaryDTO[];
 
@@ -33,13 +52,16 @@ export default async function DashboardPage() {
 
   return (
     <div className="space-y-6">
-      <h1 className="text-2xl font-semibold">ダッシュボード</h1>
+      <div className="flex flex-wrap items-center justify-between gap-4">
+        <h1 className="text-2xl font-semibold">ダッシュボード</h1>
+        <YearSelector year={year} availableYears={availableYears} />
+      </div>
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <Card>
           <CardHeader className="flex-row items-center justify-between space-y-0">
             <CardTitle className="text-sm font-medium text-muted-foreground">
-              {currentYear}年 支給額合計
+              {year}年 支給額合計
             </CardTitle>
             <span className="flex size-8 items-center justify-center rounded-full bg-primary/10 text-primary">
               <Wallet className="size-4" />
@@ -52,7 +74,7 @@ export default async function DashboardPage() {
         <Card>
           <CardHeader className="flex-row items-center justify-between space-y-0">
             <CardTitle className="text-sm font-medium text-muted-foreground">
-              {currentYear}年 手取額合計
+              {year}年 手取額合計
             </CardTitle>
             <span className="flex size-8 items-center justify-center rounded-full bg-primary/10 text-primary">
               <TrendingUp className="size-4" />
