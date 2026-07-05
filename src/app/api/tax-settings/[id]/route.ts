@@ -28,3 +28,15 @@ export async function PUT(request: Request, { params }: Params) {
   const taxSetting = await db.taxSetting.update({ where: { id }, data });
   return Response.json(taxSetting);
 }
+
+export async function DELETE(_request: Request, { params }: Params) {
+  const userId = await requireUserId();
+  if (!userId) return Response.json({ error: "Unauthorized" }, { status: 401 });
+
+  const { id } = await params;
+  const existing = await db.taxSetting.findFirst({ where: { id, userId } });
+  if (!existing) return Response.json({ error: "Not Found" }, { status: 404 });
+
+  await db.taxSetting.delete({ where: { id } });
+  return new Response(null, { status: 204 });
+}

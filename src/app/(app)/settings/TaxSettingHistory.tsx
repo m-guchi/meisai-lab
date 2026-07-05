@@ -1,8 +1,23 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { Pencil, Trash2 } from "lucide-react";
+import { toast } from "sonner";
 
 import { cn } from "@/lib/utils";
+import { Button } from "@/components/ui/button";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 import type { TaxSettingDTO } from "@/types";
 
 export function TaxSettingHistory({
@@ -14,7 +29,19 @@ export function TaxSettingHistory({
   selectedYear: number;
   selectedMonth: number;
 }) {
+  const router = useRouter();
+
   if (taxSettings.length === 0) return null;
+
+  async function handleDelete(id: string) {
+    const res = await fetch(`/api/tax-settings/${id}`, { method: "DELETE" });
+    if (!res.ok) {
+      toast.error("削除に失敗しました");
+      return;
+    }
+    toast.success("削除しました");
+    router.refresh();
+  }
 
   return (
     <div className="space-y-2">
@@ -27,6 +54,7 @@ export function TaxSettingHistory({
               <th className="p-2 text-right font-medium">健康保険料率</th>
               <th className="p-2 text-right font-medium">厚生年金料率</th>
               <th className="p-2 text-right font-medium">雇用保険料率</th>
+              <th className="w-20" />
             </tr>
           </thead>
           <tbody>
@@ -48,6 +76,16 @@ export function TaxSettingHistory({
                   <td className="p-2 text-right">{Number(setting.healthInsuranceRate)}%</td>
                   <td className="p-2 text-right">{Number(setting.pensionRate)}%</td>
                   <td className="p-2 text-right">{Number(setting.employmentInsuranceRate)}%</td>
+                  <td className="p-2">
+                    <div className="flex justify-end gap-1">
+                      <Button asChild variant="ghost" size="icon">
+                        <Link href={`/settings?year=${year}&month=${month}`}>
+                          <Pencil className="size-4" />
+                        </Link>
+                      </Button>
+                      <DeleteButton year={year} month={month} onConfirm={() => handleDelete(setting.id)} />
+                    </div>
+                  </td>
                 </tr>
               );
             })}
@@ -55,5 +93,37 @@ export function TaxSettingHistory({
         </table>
       </div>
     </div>
+  );
+}
+
+function DeleteButton({
+  year,
+  month,
+  onConfirm,
+}: {
+  year: number;
+  month: number;
+  onConfirm: () => void;
+}) {
+  return (
+    <AlertDialog>
+      <AlertDialogTrigger asChild>
+        <Button variant="ghost" size="icon">
+          <Trash2 className="size-4" />
+        </Button>
+      </AlertDialogTrigger>
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle>
+            {year}年{month}月〜の設定を削除しますか？
+          </AlertDialogTitle>
+          <AlertDialogDescription>この操作は取り消せません。</AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogCancel>キャンセル</AlertDialogCancel>
+          <AlertDialogAction onClick={onConfirm}>削除する</AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
   );
 }
