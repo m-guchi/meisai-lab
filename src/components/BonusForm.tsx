@@ -126,7 +126,9 @@ export function BonusForm({
   const customStatutoryDeductionTotal = customTotal(statutoryDeductionItems);
   const customDeductionTotal = customTotal(deductionItems);
 
-  const grossAmount = baseAmount + customEarningTotal + customOtherEarningTotal;
+  const earningSectionTotal = baseAmount + customEarningTotal;
+
+  const grossAmount = earningSectionTotal + customOtherEarningTotal;
 
   const standardBonusAmountDefault = useMemo(
     () => calculateStandardBonusAmount(grossAmount),
@@ -152,6 +154,15 @@ export function BonusForm({
     employmentInsurance,
     insuranceDefaults.employmentInsurance
   );
+  const statutoryDeductionSectionTotal =
+    resolvedHealthInsurance +
+    resolvedPension +
+    resolvedEmploymentInsurance +
+    incomeTax +
+    residentTax +
+    customStatutoryDeductionTotal;
+  const deductionSectionTotal = otherDeduction + customDeductionTotal;
+
   const netAmount =
     grossAmount -
     resolvedHealthInsurance -
@@ -276,6 +287,10 @@ export function BonusForm({
             ))}
           </div>
         )}
+        <div className="flex justify-between border-t pt-2 text-sm font-medium">
+          <span>支給 小計</span>
+          <span>{earningSectionTotal.toLocaleString()} 円</span>
+        </div>
       </div>
 
       {otherEarningItems.length > 0 && (
@@ -292,6 +307,10 @@ export function BonusForm({
                 />
               </div>
             ))}
+          </div>
+          <div className="flex justify-between border-t pt-2 text-sm font-medium">
+            <span>その他支給 小計</span>
+            <span>{customOtherEarningTotal.toLocaleString()} 円</span>
           </div>
         </div>
       )}
@@ -426,6 +445,10 @@ export function BonusForm({
             ))}
           </div>
         )}
+        <div className="flex justify-between border-t pt-2 text-sm font-medium">
+          <span>法定控除 小計</span>
+          <span>{statutoryDeductionSectionTotal.toLocaleString()} 円</span>
+        </div>
       </div>
 
       <div className="space-y-3 rounded-md border p-3">
@@ -455,6 +478,10 @@ export function BonusForm({
             ))}
           </div>
         )}
+        <div className="flex justify-between border-t pt-2 text-sm font-medium">
+          <span>控除 小計</span>
+          <span>{deductionSectionTotal.toLocaleString()} 円</span>
+        </div>
       </div>
 
       <div className="space-y-1.5">
