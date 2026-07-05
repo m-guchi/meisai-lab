@@ -4,7 +4,7 @@ import { useState } from "react";
 import { useForm, Controller } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { toast } from "sonner";
-import { GripVertical, Plus } from "lucide-react";
+import { GripVertical, Pencil, Plus } from "lucide-react";
 import {
   DndContext,
   closestCenter,
@@ -71,6 +71,7 @@ export function ItemManager({ items: initialItems }: { items: ItemDTO[] }) {
   const router = useRouter();
   const [items, setItems] = useState(initialItems);
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [editingItem, setEditingItem] = useState<ItemDTO | null>(null);
 
   const sensors = useSensors(useSensor(PointerSensor));
 
@@ -84,6 +85,18 @@ export function ItemManager({ items: initialItems }: { items: ItemDTO[] }) {
     resolver: zodResolver(CreateItemSchema.pick({ itemName: true, itemType: true, scope: true })),
     defaultValues: { itemName: "", itemType: "earning", scope: "both" },
   });
+
+  function openCreateDialog() {
+    setEditingItem(null);
+    reset({ itemName: "", itemType: "earning", scope: "both" });
+    setDialogOpen(true);
+  }
+
+  function openEditDialog(item: ItemDTO) {
+    setEditingItem(item);
+    reset({ itemName: item.itemName, itemType: item.itemType, scope: item.scope });
+    setDialogOpen(true);
+  }
 
   async function persistOrder(reordered: ItemDTO[]) {
     setItems(reordered);
@@ -126,19 +139,35 @@ export function ItemManager({ items: initialItems }: { items: ItemDTO[] }) {
   }
 
   async function onSubmit(values: ItemFormValues) {
-    const res = await fetch("/api/items", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(values),
-    });
-    if (!res.ok) {
-      toast.error("項目の追加に失敗しました");
-      return;
+    if (editingItem) {
+      const res = await fetch(`/api/items/${editingItem.id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(values),
+      });
+      if (!res.ok) {
+        toast.error("項目の更新に失敗しました");
+        return;
+      }
+      const updated: ItemDTO = await res.json();
+      setItems((prev) => prev.map((i) => (i.id === updated.id ? updated : i)));
+      toast.success("項目を更新しました");
+    } else {
+      const res = await fetch("/api/items", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(values),
+      });
+      if (!res.ok) {
+        toast.error("項目の追加に失敗しました");
+        return;
+      }
+      const created: ItemDTO = await res.json();
+      setItems((prev) => [...prev, created]);
+      toast.success("項目を追加しました");
     }
-    const created: ItemDTO = await res.json();
-    setItems((prev) => [...prev, created]);
-    toast.success("項目を追加しました");
     reset();
+    setEditingItem(null);
     setDialogOpen(false);
     router.refresh();
   }
@@ -146,16 +175,22 @@ export function ItemManager({ items: initialItems }: { items: ItemDTO[] }) {
   return (
     <div className="space-y-4">
       <div className="flex justify-end">
-        <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+        <Dialog
+          open={dialogOpen}
+          onOpenChange={(open) => {
+            setDialogOpen(open);
+            if (!open) setEditingItem(null);
+          }}
+        >
           <DialogTrigger asChild>
-            <Button>
+            <Button onClick={openCreateDialog}>
               <Plus className="size-4" />
               項目を追加
             </Button>
           </DialogTrigger>
           <DialogContent>
             <DialogHeader>
-              <DialogTitle>項目を追加</DialogTitle>
+              <DialogTitle>{editingItem ? "項目を編集" : "項目を追加"}</DialogTitle>
             </DialogHeader>
             <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
               <div className="space-y-1.5">
@@ -204,7 +239,7 @@ export function ItemManager({ items: initialItems }: { items: ItemDTO[] }) {
                 />
               </div>
               <Button type="submit" className="w-full">
-                追加する
+                {editingItem ? "更新する" : "追加する"}
               </Button>
             </form>
           </DialogContent>
@@ -232,7 +267,12 @@ export function ItemManager({ items: initialItems }: { items: ItemDTO[] }) {
                 >
                   <div className="space-y-2">
                     {categoryItems.map((item) => (
-                      <SortableItemRow key={item.id} item={item} onToggleActive={handleToggleActive} />
+                      <SortableItemRow
+                        key={item.id}
+                        item={item}
+                        onToggleActive={handleToggleActive}
+                        onEdit={openEditDialog}
+                      />
                     ))}
                   </div>
                 </SortableContext>
@@ -248,9 +288,11 @@ export function ItemManager({ items: initialItems }: { items: ItemDTO[] }) {
 function SortableItemRow({
   item,
   onToggleActive,
+  onEdit,
 }: {
   item: ItemDTO;
   onToggleActive: (item: ItemDTO) => void;
+  onEdit: (item: ItemDTO) => void;
 }) {
   const { attributes, listeners, setNodeRef, transform, transition } = useSortable({ id: item.id });
 
@@ -271,6 +313,14 @@ function SortableItemRow({
           <p className="font-medium">{item.itemName}</p>
         </div>
         <Badge variant="secondary">{SCOPE_LABEL[item.scope]}</Badge>
+        <button
+          type="button"
+          onClick={() => onEdit(item)}
+          className="text-muted-foreground hover:text-foreground"
+          aria-label="編集"
+        >
+          <Pencil className="size-4" />
+        </button>
         <Switch checked={item.isActive} onCheckedChange={() => onToggleActive(item)} />
       </CardContent>
       </Card>
