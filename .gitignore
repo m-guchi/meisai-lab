@@ -45,3 +45,5 @@ next-env.d.ts
 # deploy artifacts
 deploy.tar.gz
 deploy/apache-vhost.local.conf
+
+/reference
