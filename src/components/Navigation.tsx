@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { LayoutDashboard, Wallet, Gift, ListChecks, Settings, LogOut } from "lucide-react";
+import { LayoutDashboard, Wallet, Gift, ListChecks, Receipt, Settings, LogOut } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -14,6 +14,7 @@ const navItems = [
   { href: "/salaries", label: "給与", icon: Wallet },
   { href: "/bonuses", label: "賞与", icon: Gift },
   { href: "/items", label: "項目", icon: ListChecks },
+  { href: "/tax-return", label: "確定申告", icon: Receipt },
   { href: "/settings", label: "設定", icon: Settings },
 ];
 

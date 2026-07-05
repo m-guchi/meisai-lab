@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 
 import { auth } from "@/auth";
 import { db } from "@/lib/db";
+import { buildAnnualTaxData } from "@/lib/annualTaxData";
 import { SalaryForm } from "@/components/SalaryForm";
 import type { ItemDTO, TaxSettingDTO } from "@/types";
 
@@ -11,7 +12,8 @@ export default async function NewSalaryPage() {
   if (!userId) redirect("/auth/signin");
 
   const currentYear = new Date().getFullYear();
-  const [taxSetting, items, previousSalary] = await Promise.all([
+  const candidateYears = [currentYear - 1, currentYear - 2];
+  const [taxSetting, items, previousSalary, annualTaxData] = await Promise.all([
     db.taxSetting.findUnique({ where: { userId_year: { userId, year: currentYear } } }),
     db.item.findMany({
       where: { userId, isActive: true, scope: { in: ["salary", "both"] } },
@@ -21,14 +23,15 @@ export default async function NewSalaryPage() {
       where: { userId, deletedAt: null },
       orderBy: { salaryDate: "desc" },
     }),
+    buildAnnualTaxData(userId, candidateYears),
   ]);
   const taxSettingDto = taxSetting
     ? (JSON.parse(JSON.stringify(taxSetting)) as TaxSettingDTO)
     : null;
   const itemDtos = JSON.parse(JSON.stringify(items)) as ItemDTO[];
+  const previousSalaryData = previousSalary?.data as Record<string, unknown> | undefined;
   const previousStandardMonthlyRemuneration = (() => {
-    const data = previousSalary?.data as Record<string, unknown> | undefined;
-    const value = data?.standardMonthlyRemuneration;
+    const value = previousSalaryData?.standardMonthlyRemuneration;
     return typeof value === "number" ? value : undefined;
   })();
 
@@ -39,6 +42,8 @@ export default async function NewSalaryPage() {
         taxSetting={taxSettingDto}
         items={itemDtos}
         previousStandardMonthlyRemuneration={previousStandardMonthlyRemuneration}
+        previousSalaryData={previousSalaryData}
+        annualTaxData={annualTaxData}
       />
     </div>
   );

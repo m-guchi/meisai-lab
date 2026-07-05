@@ -112,6 +112,7 @@ model Item {
   itemName     String // "基本給", "残業手当" など
   itemType     String // "earning"(支給) / "otherEarning"(その他支給) / "statutoryDeduction"(法定控除) / "deduction"(控除)
   scope        String  @default("both") // "salary" / "bonus" / "both"
+  isTaxable    Boolean @default(true) // 支給/その他支給項目が課税対象かどうか（通勤手当等の非課税支給を区別する）
   displayOrder Int     @default(0)
   isActive     Boolean @default(true)
 
@@ -143,12 +144,13 @@ model Deduction {
   userId String
   user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  deductionType String // "life_insurance" / "furusato_nozei" / "other"
+  deductionType String // "lifeInsuranceGeneral" / "lifeInsuranceCareMedical" / "lifeInsurancePension" / "furusatoNozei"
   amount        Decimal @db.Decimal(10, 2)
   year          Int
   note          String? @db.Text
 
   createdAt DateTime @default(now())
 
+  @@unique([userId, year, deductionType])
   @@index([userId, year])
 }

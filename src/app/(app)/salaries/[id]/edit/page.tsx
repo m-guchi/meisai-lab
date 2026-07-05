@@ -2,6 +2,7 @@ import { notFound, redirect } from "next/navigation";
 
 import { auth } from "@/auth";
 import { db } from "@/lib/db";
+import { buildAnnualTaxData } from "@/lib/annualTaxData";
 import { SalaryForm } from "@/components/SalaryForm";
 import type { ItemDTO, SalaryDTO, TaxSettingDTO } from "@/types";
 
@@ -19,7 +20,8 @@ export default async function EditSalaryPage({
   if (!salary) notFound();
 
   const year = salary.salaryDate.getFullYear();
-  const [taxSetting, items, previousSalary] = await Promise.all([
+  const candidateYears = [year - 1, year - 2];
+  const [taxSetting, items, previousSalary, annualTaxData] = await Promise.all([
     db.taxSetting.findUnique({ where: { userId_year: { userId, year } } }),
     db.item.findMany({
       where: { userId, isActive: true, scope: { in: ["salary", "both"] } },
@@ -29,6 +31,7 @@ export default async function EditSalaryPage({
       where: { userId, deletedAt: null, salaryDate: { lt: salary.salaryDate } },
       orderBy: { salaryDate: "desc" },
     }),
+    buildAnnualTaxData(userId, candidateYears),
   ]);
 
   const salaryDto = JSON.parse(JSON.stringify(salary)) as SalaryDTO;
@@ -36,9 +39,9 @@ export default async function EditSalaryPage({
     ? (JSON.parse(JSON.stringify(taxSetting)) as TaxSettingDTO)
     : null;
   const itemDtos = JSON.parse(JSON.stringify(items)) as ItemDTO[];
+  const previousSalaryData = previousSalary?.data as Record<string, unknown> | undefined;
   const previousStandardMonthlyRemuneration = (() => {
-    const data = previousSalary?.data as Record<string, unknown> | undefined;
-    const value = data?.standardMonthlyRemuneration;
+    const value = previousSalaryData?.standardMonthlyRemuneration;
     return typeof value === "number" ? value : undefined;
   })();
 
@@ -50,6 +53,8 @@ export default async function EditSalaryPage({
         taxSetting={taxSettingDto}
         items={itemDtos}
         previousStandardMonthlyRemuneration={previousStandardMonthlyRemuneration}
+        previousSalaryData={previousSalaryData}
+        annualTaxData={annualTaxData}
       />
     </div>
   );

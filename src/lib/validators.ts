@@ -32,6 +32,7 @@ export const CreateItemSchema = z.object({
   itemName: z.string().min(1, "項目名は必須").max(50),
   itemType: ItemTypeEnum,
   scope: ItemScopeEnum.optional(),
+  isTaxable: z.boolean().optional(),
   displayOrder: z.number().int().optional(),
   isActive: z.boolean().optional(),
 });
@@ -47,3 +48,19 @@ export const CreateTaxSettingSchema = z.object({
 });
 export type CreateTaxSetting = z.infer<typeof CreateTaxSettingSchema>;
 export const UpdateTaxSettingSchema = CreateTaxSettingSchema.partial();
+
+export const DeductionTypeEnum = z.enum([
+  "lifeInsuranceGeneral",
+  "lifeInsuranceCareMedical",
+  "lifeInsurancePension",
+  "furusatoNozei",
+]);
+
+export const CreateDeductionSchema = z.object({
+  deductionType: DeductionTypeEnum,
+  amount: z.number().min(0),
+  year: z.number().int().min(2000).max(2100),
+  note: z.string().optional(),
+});
+export type CreateDeduction = z.infer<typeof CreateDeductionSchema>;
+export const UpdateDeductionSchema = CreateDeductionSchema.partial();

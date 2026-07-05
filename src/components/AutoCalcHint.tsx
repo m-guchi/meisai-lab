@@ -1,4 +1,4 @@
-export function InsuranceComparisonHint({
+export function AutoCalcHint({
   manualValue,
   autoValue,
 }: {

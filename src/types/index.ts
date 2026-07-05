@@ -36,6 +36,7 @@ export type ItemDTO = {
   itemName: string;
   itemType: ItemType;
   scope: ItemScope;
+  isTaxable: boolean;
   displayOrder: number;
   isActive: boolean;
   createdAt: string;
@@ -52,4 +53,20 @@ export type TaxSettingDTO = {
   incomeRateTaxFormula: string | null;
   createdAt: string;
   updatedAt: string;
+};
+
+export type DeductionType =
+  | "lifeInsuranceGeneral"
+  | "lifeInsuranceCareMedical"
+  | "lifeInsurancePension"
+  | "furusatoNozei";
+
+export type DeductionDTO = {
+  id: string;
+  userId: string;
+  deductionType: DeductionType;
+  amount: string;
+  year: number;
+  note: string | null;
+  createdAt: string;
 };

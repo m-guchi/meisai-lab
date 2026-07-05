@@ -9,6 +9,7 @@ import { format } from "date-fns";
 import { toast } from "sonner";
 
 import { calculateStandardBonusAmount, calculateStatutoryInsurance } from "@/lib/calculations";
+import { resolveManualNumber, parseOptionalNumberInput } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -20,7 +21,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { InsuranceComparisonHint } from "@/components/InsuranceComparisonHint";
+import { AutoCalcHint } from "@/components/AutoCalcHint";
 import type { BonusDTO, ItemDTO, TaxSettingDTO } from "@/types";
 
 const bonusFormSchema = z.object({
@@ -129,7 +130,7 @@ export function BonusForm({
     () => calculateStandardBonusAmount(grossAmount),
     [grossAmount]
   );
-  const resolvedStandardBonusAmount = standardBonusAmount ?? standardBonusAmountDefault;
+  const resolvedStandardBonusAmount = resolveManualNumber(standardBonusAmount, standardBonusAmountDefault);
 
   const insuranceDefaults = useMemo(
     () =>
@@ -143,9 +144,12 @@ export function BonusForm({
     [resolvedStandardBonusAmount, grossAmount, healthInsuranceRate, pensionRate, employmentInsuranceRate]
   );
 
-  const resolvedHealthInsurance = healthInsurance ?? insuranceDefaults.healthInsurance;
-  const resolvedPension = pension ?? insuranceDefaults.pension;
-  const resolvedEmploymentInsurance = employmentInsurance ?? insuranceDefaults.employmentInsurance;
+  const resolvedHealthInsurance = resolveManualNumber(healthInsurance, insuranceDefaults.healthInsurance);
+  const resolvedPension = resolveManualNumber(pension, insuranceDefaults.pension);
+  const resolvedEmploymentInsurance = resolveManualNumber(
+    employmentInsurance,
+    insuranceDefaults.employmentInsurance
+  );
   const netAmount =
     grossAmount -
     resolvedHealthInsurance -
@@ -301,7 +305,7 @@ export function BonusForm({
             type="number"
             step="1"
             placeholder={String(standardBonusAmountDefault)}
-            {...register("standardBonusAmount", { valueAsNumber: true })}
+            {...register("standardBonusAmount", { setValueAs: parseOptionalNumberInput })}
           />
           <p className="text-xs text-muted-foreground">
             自動計算: 支給総合計の1,000円未満を切り捨てた額（{standardBonusAmountDefault.toLocaleString()} 円）
@@ -315,9 +319,9 @@ export function BonusForm({
               id="healthInsurance"
               type="number"
               placeholder={String(insuranceDefaults.healthInsurance)}
-              {...register("healthInsurance", { valueAsNumber: true })}
+              {...register("healthInsurance", { setValueAs: parseOptionalNumberInput })}
             />
-            <InsuranceComparisonHint manualValue={healthInsurance} autoValue={insuranceDefaults.healthInsurance} />
+            <AutoCalcHint manualValue={healthInsurance} autoValue={insuranceDefaults.healthInsurance} />
           </div>
           <div className="space-y-1.5">
             <Label htmlFor="pension">厚生年金保険料</Label>
@@ -325,9 +329,9 @@ export function BonusForm({
               id="pension"
               type="number"
               placeholder={String(insuranceDefaults.pension)}
-              {...register("pension", { valueAsNumber: true })}
+              {...register("pension", { setValueAs: parseOptionalNumberInput })}
             />
-            <InsuranceComparisonHint manualValue={pension} autoValue={insuranceDefaults.pension} />
+            <AutoCalcHint manualValue={pension} autoValue={insuranceDefaults.pension} />
           </div>
           <div className="space-y-1.5">
             <Label htmlFor="employmentInsurance">雇用保険料</Label>
@@ -335,20 +339,20 @@ export function BonusForm({
               id="employmentInsurance"
               type="number"
               placeholder={String(insuranceDefaults.employmentInsurance)}
-              {...register("employmentInsurance", { valueAsNumber: true })}
+              {...register("employmentInsurance", { setValueAs: parseOptionalNumberInput })}
             />
-            <InsuranceComparisonHint
+            <AutoCalcHint
               manualValue={employmentInsurance}
               autoValue={insuranceDefaults.employmentInsurance}
             />
           </div>
           <div className="space-y-1.5">
             <Label htmlFor="incomeTax">所得税</Label>
-            <Input id="incomeTax" type="number" {...register("incomeTax", { valueAsNumber: true })} />
+            <Input id="incomeTax" type="number" {...register("incomeTax", { setValueAs: parseOptionalNumberInput })} />
           </div>
           <div className="space-y-1.5">
             <Label htmlFor="residentTax">住民税</Label>
-            <Input id="residentTax" type="number" {...register("residentTax", { valueAsNumber: true })} />
+            <Input id="residentTax" type="number" {...register("residentTax", { setValueAs: parseOptionalNumberInput })} />
           </div>
         </div>
 
@@ -373,7 +377,7 @@ export function BonusForm({
         <p className="text-sm font-medium">控除</p>
         <div className="space-y-1.5">
           <Label htmlFor="otherDeduction">その他控除</Label>
-          <Input id="otherDeduction" type="number" {...register("otherDeduction", { valueAsNumber: true })} />
+          <Input id="otherDeduction" type="number" {...register("otherDeduction", { setValueAs: parseOptionalNumberInput })} />
         </div>
 
         {deductionItems.length > 0 && (

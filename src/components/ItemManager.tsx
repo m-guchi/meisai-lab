@@ -45,7 +45,12 @@ import {
 import { Card, CardContent } from "@/components/ui/card";
 import type { ItemDTO, ItemScope, ItemType } from "@/types";
 
-type ItemFormValues = { itemName: string; itemType: ItemType; scope: ItemScope };
+type ItemFormValues = {
+  itemName: string;
+  itemType: ItemType;
+  scope: ItemScope;
+  isTaxable: boolean;
+};
 
 const ITEM_TYPE_ORDER: ItemType[] = [
   "earning",
@@ -80,21 +85,32 @@ export function ItemManager({ items: initialItems }: { items: ItemDTO[] }) {
     control,
     handleSubmit,
     reset,
+    watch,
     formState: { errors },
   } = useForm<ItemFormValues>({
-    resolver: zodResolver(CreateItemSchema.pick({ itemName: true, itemType: true, scope: true })),
-    defaultValues: { itemName: "", itemType: "earning", scope: "both" },
+    resolver: zodResolver(
+      CreateItemSchema.pick({ itemName: true, itemType: true, scope: true, isTaxable: true })
+    ),
+    defaultValues: { itemName: "", itemType: "earning", scope: "both", isTaxable: true },
   });
+
+  const watchedItemType = watch("itemType");
+  const isEarningType = watchedItemType === "earning" || watchedItemType === "otherEarning";
 
   function openCreateDialog() {
     setEditingItem(null);
-    reset({ itemName: "", itemType: "earning", scope: "both" });
+    reset({ itemName: "", itemType: "earning", scope: "both", isTaxable: true });
     setDialogOpen(true);
   }
 
   function openEditDialog(item: ItemDTO) {
     setEditingItem(item);
-    reset({ itemName: item.itemName, itemType: item.itemType, scope: item.scope });
+    reset({
+      itemName: item.itemName,
+      itemType: item.itemType,
+      scope: item.scope,
+      isTaxable: item.isTaxable,
+    });
     setDialogOpen(true);
   }
 
@@ -258,6 +274,22 @@ export function ItemManager({ items: initialItems }: { items: ItemDTO[] }) {
                   }}
                 />
               </div>
+              {isEarningType && (
+                <div className="flex items-center justify-between">
+                  <Label htmlFor="isTaxable">課税対象</Label>
+                  <Controller
+                    control={control}
+                    name="isTaxable"
+                    render={({ field }) => (
+                      <Switch
+                        id="isTaxable"
+                        checked={field.value}
+                        onCheckedChange={field.onChange}
+                      />
+                    )}
+                  />
+                </div>
+              )}
               <Button type="submit" className="w-full">
                 {editingItem ? "更新する" : "追加する"}
               </Button>
@@ -333,6 +365,9 @@ function SortableItemRow({
           <p className="font-medium">{item.itemName}</p>
         </div>
         <Badge variant="secondary">{SCOPE_LABEL[item.scope]}</Badge>
+        {(item.itemType === "earning" || item.itemType === "otherEarning") && !item.isTaxable && (
+          <Badge variant="outline">非課税</Badge>
+        )}
         <button
           type="button"
           onClick={() => onEdit(item)}
