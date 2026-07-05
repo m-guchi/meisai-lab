@@ -220,22 +220,42 @@ export function ItemManager({ items: initialItems }: { items: ItemDTO[] }) {
                 />
               </div>
               <div className="space-y-1.5">
-                <Label htmlFor="scope">適用範囲</Label>
+                <Label>適用範囲</Label>
                 <Controller
                   control={control}
                   name="scope"
-                  render={({ field }) => (
-                    <Select value={field.value} onValueChange={field.onChange}>
-                      <SelectTrigger id="scope" className="w-full">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectOption value="salary">給与のみ</SelectOption>
-                        <SelectOption value="bonus">賞与のみ</SelectOption>
-                        <SelectOption value="both">両方</SelectOption>
-                      </SelectContent>
-                    </Select>
-                  )}
+                  render={({ field }) => {
+                    const salarySelected = field.value !== "bonus";
+                    const bonusSelected = field.value !== "salary";
+
+                    function toggle(target: "salary" | "bonus") {
+                      const nextSalary = target === "salary" ? !salarySelected : salarySelected;
+                      const nextBonus = target === "bonus" ? !bonusSelected : bonusSelected;
+                      if (!nextSalary && !nextBonus) return;
+                      const nextScope: ItemScope =
+                        nextSalary && nextBonus ? "both" : nextSalary ? "salary" : "bonus";
+                      field.onChange(nextScope);
+                    }
+
+                    return (
+                      <div className="flex gap-2">
+                        <Button
+                          type="button"
+                          variant={salarySelected ? "default" : "outline"}
+                          onClick={() => toggle("salary")}
+                        >
+                          給与
+                        </Button>
+                        <Button
+                          type="button"
+                          variant={bonusSelected ? "default" : "outline"}
+                          onClick={() => toggle("bonus")}
+                        >
+                          賞与
+                        </Button>
+                      </div>
+                    );
+                  }}
                 />
               </div>
               <Button type="submit" className="w-full">
