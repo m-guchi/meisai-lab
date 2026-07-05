@@ -55,6 +55,7 @@ type ItemFormValues = {
 const ITEM_TYPE_ORDER: ItemType[] = [
   "earning",
   "otherEarning",
+  "otherTaxable",
   "statutoryDeduction",
   "deduction",
 ];
@@ -62,6 +63,7 @@ const ITEM_TYPE_ORDER: ItemType[] = [
 const ITEM_TYPE_LABEL: Record<ItemType, string> = {
   earning: "支給",
   otherEarning: "その他支給",
+  otherTaxable: "その他(課税処理)",
   statutoryDeduction: "法定控除",
   deduction: "控除",
 };

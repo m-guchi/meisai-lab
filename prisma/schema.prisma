@@ -110,7 +110,7 @@ model Item {
   user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   itemName     String // "基本給", "残業手当" など
-  itemType     String // "earning"(支給) / "otherEarning"(その他支給) / "statutoryDeduction"(法定控除) / "deduction"(控除)
+  itemType     String // "earning"(支給) / "otherEarning"(その他支給) / "otherTaxable"(その他(課税処理)) / "statutoryDeduction"(法定控除) / "deduction"(控除)
   scope        String  @default("both") // "salary" / "bonus" / "both"
   isTaxable    Boolean @default(true) // 支給/その他支給項目が課税対象かどうか（通勤手当等の非課税支給を区別する）
   displayOrder Int     @default(0)

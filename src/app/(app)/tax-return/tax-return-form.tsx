@@ -2,13 +2,14 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { useForm } from "react-hook-form";
+import { useForm, Controller } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { AmountInput } from "@/components/ui/amount-input";
 import { Label } from "@/components/ui/label";
 import type { DeductionType } from "@/types";
 
@@ -33,7 +34,7 @@ export function TaxReturnForm({
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const {
-    register,
+    control,
     handleSubmit,
     formState: { errors },
   } = useForm<FormValues>({
@@ -96,10 +97,12 @@ export function TaxReturnForm({
       </div>
       <div className="space-y-1.5">
         <Label htmlFor="lifeInsuranceGeneral">一般生命保険料（年間支払額）</Label>
-        <Input
-          id="lifeInsuranceGeneral"
-          type="number"
-          {...register("lifeInsuranceGeneral", { valueAsNumber: true })}
+        <Controller
+          control={control}
+          name="lifeInsuranceGeneral"
+          render={({ field }) => (
+            <AmountInput id="lifeInsuranceGeneral" value={field.value} onChange={field.onChange} />
+          )}
         />
         {errors.lifeInsuranceGeneral && (
           <p className="text-sm text-destructive">{errors.lifeInsuranceGeneral.message}</p>
@@ -107,10 +110,12 @@ export function TaxReturnForm({
       </div>
       <div className="space-y-1.5">
         <Label htmlFor="lifeInsuranceCareMedical">介護医療保険料（年間支払額）</Label>
-        <Input
-          id="lifeInsuranceCareMedical"
-          type="number"
-          {...register("lifeInsuranceCareMedical", { valueAsNumber: true })}
+        <Controller
+          control={control}
+          name="lifeInsuranceCareMedical"
+          render={({ field }) => (
+            <AmountInput id="lifeInsuranceCareMedical" value={field.value} onChange={field.onChange} />
+          )}
         />
         {errors.lifeInsuranceCareMedical && (
           <p className="text-sm text-destructive">{errors.lifeInsuranceCareMedical.message}</p>
@@ -118,10 +123,12 @@ export function TaxReturnForm({
       </div>
       <div className="space-y-1.5">
         <Label htmlFor="lifeInsurancePension">個人年金保険料（年間支払額）</Label>
-        <Input
-          id="lifeInsurancePension"
-          type="number"
-          {...register("lifeInsurancePension", { valueAsNumber: true })}
+        <Controller
+          control={control}
+          name="lifeInsurancePension"
+          render={({ field }) => (
+            <AmountInput id="lifeInsurancePension" value={field.value} onChange={field.onChange} />
+          )}
         />
         {errors.lifeInsurancePension && (
           <p className="text-sm text-destructive">{errors.lifeInsurancePension.message}</p>
@@ -129,10 +136,12 @@ export function TaxReturnForm({
       </div>
       <div className="space-y-1.5">
         <Label htmlFor="furusatoNozei">ふるさと納税額（年間合計）</Label>
-        <Input
-          id="furusatoNozei"
-          type="number"
-          {...register("furusatoNozei", { valueAsNumber: true })}
+        <Controller
+          control={control}
+          name="furusatoNozei"
+          render={({ field }) => (
+            <AmountInput id="furusatoNozei" value={field.value} onChange={field.onChange} />
+          )}
         />
         {errors.furusatoNozei && (
           <p className="text-sm text-destructive">{errors.furusatoNozei.message}</p>

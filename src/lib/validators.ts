@@ -23,6 +23,7 @@ export const UpdateBonusSchema = CreateBonusSchema.partial();
 export const ItemTypeEnum = z.enum([
   "earning",
   "otherEarning",
+  "otherTaxable",
   "statutoryDeduction",
   "deduction",
 ]);

@@ -27,7 +27,12 @@ export type BonusDTO = {
   deletedAt: string | null;
 };
 
-export type ItemType = "earning" | "otherEarning" | "statutoryDeduction" | "deduction";
+export type ItemType =
+  | "earning"
+  | "otherEarning"
+  | "otherTaxable"
+  | "statutoryDeduction"
+  | "deduction";
 export type ItemScope = "salary" | "bonus" | "both";
 
 export type ItemDTO = {

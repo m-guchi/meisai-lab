@@ -15,9 +15,9 @@ import {
   calculateWithholdingIncomeTax,
 } from "@/lib/calculations";
 import { calculateAnnualResidentTax, getResidentTaxAssessmentYear } from "@/lib/annualTax";
-import { cn, resolveManualNumber, parseOptionalNumberInput } from "@/lib/utils";
+import { cn, resolveManualNumber } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { AmountInput } from "@/components/ui/amount-input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Calendar } from "@/components/ui/calendar";
@@ -89,6 +89,7 @@ export function SalaryForm({
 
   const earningItems = items.filter((item) => item.itemType === "earning");
   const otherEarningItems = items.filter((item) => item.itemType === "otherEarning");
+  const otherTaxableItems = items.filter((item) => item.itemType === "otherTaxable");
   const statutoryDeductionItems = items.filter((item) => item.itemType === "statutoryDeduction");
   const deductionItems = items.filter((item) => item.itemType === "deduction");
 
@@ -152,6 +153,7 @@ export function SalaryForm({
 
   const customEarningTotal = customTotal(earningItems);
   const customOtherEarningTotal = customTotal(otherEarningItems);
+  const customOtherTaxableTotal = customTotal(otherTaxableItems);
   const customStatutoryDeductionTotal = customTotal(statutoryDeductionItems);
   const customDeductionTotal = customTotal(deductionItems);
 
@@ -190,7 +192,8 @@ export function SalaryForm({
     resolvedHealthInsurance -
     resolvedPension -
     resolvedEmploymentInsurance -
-    nonTaxableEarningTotal;
+    nonTaxableEarningTotal +
+    customOtherTaxableTotal;
   const incomeTaxAuto = useMemo(
     () => calculateWithholdingIncomeTax(taxableBase),
     [taxableBase]
@@ -231,9 +234,8 @@ export function SalaryForm({
     customStatutoryDeductionTotal -
     customDeductionTotal;
 
-  function handleCustomValueChange(itemId: string, value: string) {
-    const parsed = Number(value);
-    setCustomValues((prev) => ({ ...prev, [itemId]: Number.isFinite(parsed) ? parsed : 0 }));
+  function handleCustomValueChange(itemId: string, value: number | undefined) {
+    setCustomValues((prev) => ({ ...prev, [itemId]: value ?? 0 }));
   }
 
   function customPlaceholder(itemId: string): string | undefined {
@@ -332,27 +334,33 @@ export function SalaryForm({
         <p className="text-sm font-medium">支給</p>
         <div className="space-y-1.5">
           <Label htmlFor="baseSalary">基本給</Label>
-          <Input
-            id="baseSalary"
-            type="number"
-            step="1"
-            placeholder={
-              parseDataNumber(previousSalaryData, "baseGrossSalary") !== undefined
-                ? String(parseDataNumber(previousSalaryData, "baseGrossSalary"))
-                : undefined
-            }
-            {...register("baseSalary", { valueAsNumber: true })}
+          <Controller
+            control={control}
+            name="baseSalary"
+            render={({ field }) => (
+              <AmountInput
+                id="baseSalary"
+                placeholder={
+                  parseDataNumber(previousSalaryData, "baseGrossSalary") !== undefined
+                    ? String(parseDataNumber(previousSalaryData, "baseGrossSalary"))
+                    : undefined
+                }
+                value={field.value}
+                onChange={field.onChange}
+              />
+            )}
           />
           {errors.baseSalary && <p className="text-sm text-destructive">{errors.baseSalary.message}</p>}
         </div>
 
         <div className="space-y-1.5">
           <Label htmlFor="overtimeHours">残業時間</Label>
-          <Input
-            id="overtimeHours"
-            type="number"
-            step="0.5"
-            {...register("overtimeHours", { setValueAs: parseOptionalNumberInput })}
+          <Controller
+            control={control}
+            name="overtimeHours"
+            render={({ field }) => (
+              <AmountInput id="overtimeHours" value={field.value} onChange={field.onChange} />
+            )}
           />
           <p className="text-xs text-muted-foreground">
             時給 {overtime.hourlyRate.toLocaleString()} 円 × {overtimeHours} 時間 = 残業代{" "}
@@ -362,14 +370,19 @@ export function SalaryForm({
 
         <div className="space-y-1.5">
           <Label htmlFor="overtimeAmount">超勤手当</Label>
-          <Input
-            id="overtimeAmount"
-            type="number"
-            step="1"
-            placeholder={
-              overtimeAmountPlaceholder !== undefined ? String(overtimeAmountPlaceholder) : undefined
-            }
-            {...register("overtimeAmount", { setValueAs: parseOptionalNumberInput })}
+          <Controller
+            control={control}
+            name="overtimeAmount"
+            render={({ field }) => (
+              <AmountInput
+                id="overtimeAmount"
+                placeholder={
+                  overtimeAmountPlaceholder !== undefined ? String(overtimeAmountPlaceholder) : undefined
+                }
+                value={field.value}
+                onChange={field.onChange}
+              />
+            )}
           />
           {overtimeHours > 0 && (
             <AutoCalcHint manualValue={overtimeAmount} autoValue={overtime.overtimeAmount} />
@@ -381,12 +394,11 @@ export function SalaryForm({
             {earningItems.map((item) => (
               <div key={item.id} className="space-y-1.5">
                 <Label htmlFor={`custom-${item.id}`}>{item.itemName}</Label>
-                <Input
+                <AmountInput
                   id={`custom-${item.id}`}
-                  type="number"
                   placeholder={customPlaceholder(item.id)}
-                  value={customValues[item.id] ?? ""}
-                  onChange={(e) => handleCustomValueChange(item.id, e.target.value)}
+                  value={customValues[item.id]}
+                  onChange={(value) => handleCustomValueChange(item.id, value)}
                 />
               </div>
             ))}
@@ -401,12 +413,33 @@ export function SalaryForm({
             {otherEarningItems.map((item) => (
               <div key={item.id} className="space-y-1.5">
                 <Label htmlFor={`custom-${item.id}`}>{item.itemName}</Label>
-                <Input
+                <AmountInput
                   id={`custom-${item.id}`}
-                  type="number"
                   placeholder={customPlaceholder(item.id)}
-                  value={customValues[item.id] ?? ""}
-                  onChange={(e) => handleCustomValueChange(item.id, e.target.value)}
+                  value={customValues[item.id]}
+                  onChange={(value) => handleCustomValueChange(item.id, value)}
+                />
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {otherTaxableItems.length > 0 && (
+        <div className="space-y-3 rounded-md border p-3">
+          <p className="text-sm font-medium">その他(課税処理)（/items で追加できます）</p>
+          <p className="text-xs text-muted-foreground">
+            支給額には含めず、所得税の課税対象額にのみ加算されます。
+          </p>
+          <div className="grid grid-cols-2 gap-4">
+            {otherTaxableItems.map((item) => (
+              <div key={item.id} className="space-y-1.5">
+                <Label htmlFor={`custom-${item.id}`}>{item.itemName}</Label>
+                <AmountInput
+                  id={`custom-${item.id}`}
+                  placeholder={customPlaceholder(item.id)}
+                  value={customValues[item.id]}
+                  onChange={(value) => handleCustomValueChange(item.id, value)}
                 />
               </div>
             ))}
@@ -418,11 +451,12 @@ export function SalaryForm({
         <p className="text-sm font-medium">法定控除</p>
         <div className="space-y-1.5">
           <Label htmlFor="standardMonthlyRemuneration">標準報酬月額</Label>
-          <Input
-            id="standardMonthlyRemuneration"
-            type="number"
-            step="1"
-            {...register("standardMonthlyRemuneration", { setValueAs: parseOptionalNumberInput })}
+          <Controller
+            control={control}
+            name="standardMonthlyRemuneration"
+            render={({ field }) => (
+              <AmountInput id="standardMonthlyRemuneration" value={field.value} onChange={field.onChange} />
+            )}
           />
           <p className="text-xs text-muted-foreground">
             定時決定・随時改定がない限り、前回登録時の値が引き継がれます。
@@ -432,31 +466,49 @@ export function SalaryForm({
         <div className="grid grid-cols-2 gap-4">
           <div className="space-y-1.5">
             <Label htmlFor="healthInsurance">健康保険料</Label>
-            <Input
-              id="healthInsurance"
-              type="number"
-              placeholder={String(insuranceDefaults.healthInsurance)}
-              {...register("healthInsurance", { setValueAs: parseOptionalNumberInput })}
+            <Controller
+              control={control}
+              name="healthInsurance"
+              render={({ field }) => (
+                <AmountInput
+                  id="healthInsurance"
+                  placeholder={String(insuranceDefaults.healthInsurance)}
+                  value={field.value}
+                  onChange={field.onChange}
+                />
+              )}
             />
             <AutoCalcHint manualValue={healthInsurance} autoValue={insuranceDefaults.healthInsurance} />
           </div>
           <div className="space-y-1.5">
             <Label htmlFor="pension">厚生年金保険料</Label>
-            <Input
-              id="pension"
-              type="number"
-              placeholder={String(insuranceDefaults.pension)}
-              {...register("pension", { setValueAs: parseOptionalNumberInput })}
+            <Controller
+              control={control}
+              name="pension"
+              render={({ field }) => (
+                <AmountInput
+                  id="pension"
+                  placeholder={String(insuranceDefaults.pension)}
+                  value={field.value}
+                  onChange={field.onChange}
+                />
+              )}
             />
             <AutoCalcHint manualValue={pension} autoValue={insuranceDefaults.pension} />
           </div>
           <div className="space-y-1.5">
             <Label htmlFor="employmentInsurance">雇用保険料</Label>
-            <Input
-              id="employmentInsurance"
-              type="number"
-              placeholder={String(insuranceDefaults.employmentInsurance)}
-              {...register("employmentInsurance", { setValueAs: parseOptionalNumberInput })}
+            <Controller
+              control={control}
+              name="employmentInsurance"
+              render={({ field }) => (
+                <AmountInput
+                  id="employmentInsurance"
+                  placeholder={String(insuranceDefaults.employmentInsurance)}
+                  value={field.value}
+                  onChange={field.onChange}
+                />
+              )}
             />
             <AutoCalcHint
               manualValue={employmentInsurance}
@@ -465,23 +517,35 @@ export function SalaryForm({
           </div>
           <div className="space-y-1.5">
             <Label htmlFor="incomeTax">所得税</Label>
-            <Input
-              id="incomeTax"
-              type="number"
-              placeholder={String(incomeTaxAuto)}
-              {...register("incomeTax", { setValueAs: parseOptionalNumberInput })}
+            <Controller
+              control={control}
+              name="incomeTax"
+              render={({ field }) => (
+                <AmountInput
+                  id="incomeTax"
+                  placeholder={String(incomeTaxAuto)}
+                  value={field.value}
+                  onChange={field.onChange}
+                />
+              )}
             />
             <AutoCalcHint manualValue={incomeTax} autoValue={incomeTaxAuto} />
           </div>
           <div className="space-y-1.5">
             <Label htmlFor="residentTax">住民税</Label>
-            <Input
-              id="residentTax"
-              type="number"
-              placeholder={
-                residentTaxAutoAmount !== undefined ? String(residentTaxAutoAmount) : undefined
-              }
-              {...register("residentTax", { setValueAs: parseOptionalNumberInput })}
+            <Controller
+              control={control}
+              name="residentTax"
+              render={({ field }) => (
+                <AmountInput
+                  id="residentTax"
+                  placeholder={
+                    residentTaxAutoAmount !== undefined ? String(residentTaxAutoAmount) : undefined
+                  }
+                  value={field.value}
+                  onChange={field.onChange}
+                />
+              )}
             />
             {residentTaxAutoAmount !== undefined && (
               <AutoCalcHint manualValue={residentTax} autoValue={residentTaxAutoAmount} />
@@ -494,12 +558,11 @@ export function SalaryForm({
             {statutoryDeductionItems.map((item) => (
               <div key={item.id} className="space-y-1.5">
                 <Label htmlFor={`custom-${item.id}`}>{item.itemName}</Label>
-                <Input
+                <AmountInput
                   id={`custom-${item.id}`}
-                  type="number"
                   placeholder={customPlaceholder(item.id)}
-                  value={customValues[item.id] ?? ""}
-                  onChange={(e) => handleCustomValueChange(item.id, e.target.value)}
+                  value={customValues[item.id]}
+                  onChange={(value) => handleCustomValueChange(item.id, value)}
                 />
               </div>
             ))}
@@ -511,15 +574,21 @@ export function SalaryForm({
         <p className="text-sm font-medium">控除</p>
         <div className="space-y-1.5">
           <Label htmlFor="otherDeduction">その他控除</Label>
-          <Input
-            id="otherDeduction"
-            type="number"
-            placeholder={
-              parseDataNumber(previousSalaryData, "otherDeduction") !== undefined
-                ? String(parseDataNumber(previousSalaryData, "otherDeduction"))
-                : undefined
-            }
-            {...register("otherDeduction", { setValueAs: parseOptionalNumberInput })}
+          <Controller
+            control={control}
+            name="otherDeduction"
+            render={({ field }) => (
+              <AmountInput
+                id="otherDeduction"
+                placeholder={
+                  parseDataNumber(previousSalaryData, "otherDeduction") !== undefined
+                    ? String(parseDataNumber(previousSalaryData, "otherDeduction"))
+                    : undefined
+                }
+                value={field.value}
+                onChange={field.onChange}
+              />
+            )}
           />
         </div>
 
@@ -528,12 +597,11 @@ export function SalaryForm({
             {deductionItems.map((item) => (
               <div key={item.id} className="space-y-1.5">
                 <Label htmlFor={`custom-${item.id}`}>{item.itemName}</Label>
-                <Input
+                <AmountInput
                   id={`custom-${item.id}`}
-                  type="number"
                   placeholder={customPlaceholder(item.id)}
-                  value={customValues[item.id] ?? ""}
-                  onChange={(e) => handleCustomValueChange(item.id, e.target.value)}
+                  value={customValues[item.id]}
+                  onChange={(value) => handleCustomValueChange(item.id, value)}
                 />
               </div>
             ))}
