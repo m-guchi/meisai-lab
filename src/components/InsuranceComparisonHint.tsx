@@ -1,0 +1,27 @@
+export function InsuranceComparisonHint({
+  manualValue,
+  autoValue,
+}: {
+  manualValue: number | undefined;
+  autoValue: number;
+}) {
+  if (manualValue === undefined || Number.isNaN(manualValue)) {
+    return (
+      <p className="text-xs text-muted-foreground">
+        自動計算: {autoValue.toLocaleString()} 円
+      </p>
+    );
+  }
+
+  const diff = manualValue - autoValue;
+  if (diff === 0) {
+    return <p className="text-xs text-emerald-600">✓ 自動計算と一致（{autoValue.toLocaleString()} 円）</p>;
+  }
+
+  return (
+    <p className="text-xs text-amber-600">
+      自動計算: {autoValue.toLocaleString()} 円（差異 {diff > 0 ? "+" : ""}
+      {diff.toLocaleString()} 円）
+    </p>
+  );
+}

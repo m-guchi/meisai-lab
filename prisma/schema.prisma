@@ -110,7 +110,8 @@ model Item {
   user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   itemName     String // "基本給", "残業手当" など
-  itemType     String // "earning" / "deduction"
+  itemType     String // "earning"(支給) / "otherEarning"(その他支給) / "statutoryDeduction"(法定控除) / "deduction"(控除)
+  scope        String  @default("both") // "salary" / "bonus" / "both"
   displayOrder Int     @default(0)
   isActive     Boolean @default(true)
 
@@ -125,10 +126,11 @@ model TaxSetting {
   userId String
   user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  year                 Int // 2024, 2025 等
-  healthInsuranceRate  Decimal @default(9.15) @db.Decimal(5, 2)
-  pensionRate          Decimal @default(9.15) @db.Decimal(5, 2)
-  incomeRateTaxFormula String? @db.Text // Phase 2以降
+  year                    Int // 2024, 2025 等
+  healthInsuranceRate     Decimal @default(9.15) @db.Decimal(5, 2)
+  pensionRate             Decimal @default(9.15) @db.Decimal(5, 2)
+  employmentInsuranceRate Decimal @default(0.60) @db.Decimal(5, 2)
+  incomeRateTaxFormula    String? @db.Text // Phase 2以降
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

@@ -20,9 +20,18 @@ export const CreateBonusSchema = z.object({
 export type CreateBonus = z.infer<typeof CreateBonusSchema>;
 export const UpdateBonusSchema = CreateBonusSchema.partial();
 
+export const ItemTypeEnum = z.enum([
+  "earning",
+  "otherEarning",
+  "statutoryDeduction",
+  "deduction",
+]);
+export const ItemScopeEnum = z.enum(["salary", "bonus", "both"]);
+
 export const CreateItemSchema = z.object({
   itemName: z.string().min(1, "項目名は必須").max(50),
-  itemType: z.enum(["earning", "deduction"]),
+  itemType: ItemTypeEnum,
+  scope: ItemScopeEnum.optional(),
   displayOrder: z.number().int().optional(),
   isActive: z.boolean().optional(),
 });
@@ -33,6 +42,7 @@ export const CreateTaxSettingSchema = z.object({
   year: z.number().int().min(2000).max(2100),
   healthInsuranceRate: z.number().positive().optional(),
   pensionRate: z.number().positive().optional(),
+  employmentInsuranceRate: z.number().positive().optional(),
   incomeRateTaxFormula: z.string().optional(),
 });
 export type CreateTaxSetting = z.infer<typeof CreateTaxSettingSchema>;

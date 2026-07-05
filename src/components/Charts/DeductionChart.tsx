@@ -7,6 +7,7 @@ import type { SalaryDTO } from "@/types";
 const COLORS: Record<string, string> = {
   健康保険: "#3b82f6",
   厚生年金: "#22c55e",
+  雇用保険: "#0ea5e9",
   所得税: "#f59e0b",
   住民税: "#ef4444",
   その他: "#94a3b8",
@@ -17,11 +18,12 @@ function num(value: unknown): number {
 }
 
 export function DeductionChart({ salaries }: { salaries: SalaryDTO[] }) {
-  const totals = { 健康保険: 0, 厚生年金: 0, 所得税: 0, 住民税: 0, その他: 0 };
+  const totals = { 健康保険: 0, 厚生年金: 0, 雇用保険: 0, 所得税: 0, 住民税: 0, その他: 0 };
 
   for (const salary of salaries) {
     totals.健康保険 += num(salary.data.healthInsurance);
     totals.厚生年金 += num(salary.data.pension);
+    totals.雇用保険 += num(salary.data.employmentInsurance);
     totals.所得税 += num(salary.data.incomeTax);
     totals.住民税 += num(salary.data.residentTax);
     totals.その他 += num(salary.data.otherDeduction);

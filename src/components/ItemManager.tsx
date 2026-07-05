@@ -27,6 +27,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
+import { Badge } from "@/components/ui/badge";
 import {
   Select,
   SelectContent,
@@ -42,9 +43,29 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { Card, CardContent } from "@/components/ui/card";
-import type { ItemDTO } from "@/types";
+import type { ItemDTO, ItemScope, ItemType } from "@/types";
 
-type ItemFormValues = { itemName: string; itemType: "earning" | "deduction" };
+type ItemFormValues = { itemName: string; itemType: ItemType; scope: ItemScope };
+
+const ITEM_TYPE_ORDER: ItemType[] = [
+  "earning",
+  "otherEarning",
+  "statutoryDeduction",
+  "deduction",
+];
+
+const ITEM_TYPE_LABEL: Record<ItemType, string> = {
+  earning: "支給",
+  otherEarning: "その他支給",
+  statutoryDeduction: "法定控除",
+  deduction: "控除",
+};
+
+const SCOPE_LABEL: Record<ItemScope, string> = {
+  salary: "給与",
+  bonus: "賞与",
+  both: "両方",
+};
 
 export function ItemManager({ items: initialItems }: { items: ItemDTO[] }) {
   const router = useRouter();
@@ -60,19 +81,12 @@ export function ItemManager({ items: initialItems }: { items: ItemDTO[] }) {
     reset,
     formState: { errors },
   } = useForm<ItemFormValues>({
-    resolver: zodResolver(CreateItemSchema.pick({ itemName: true, itemType: true })),
-    defaultValues: { itemName: "", itemType: "earning" },
+    resolver: zodResolver(CreateItemSchema.pick({ itemName: true, itemType: true, scope: true })),
+    defaultValues: { itemName: "", itemType: "earning", scope: "both" },
   });
 
-  async function handleDragEnd(event: DragEndEvent) {
-    const { active, over } = event;
-    if (!over || active.id === over.id) return;
-
-    const oldIndex = items.findIndex((i) => i.id === active.id);
-    const newIndex = items.findIndex((i) => i.id === over.id);
-    const reordered = arrayMove(items, oldIndex, newIndex);
+  async function persistOrder(reordered: ItemDTO[]) {
     setItems(reordered);
-
     await Promise.all(
       reordered.map((item, index) =>
         fetch(`/api/items/${item.id}`, {
@@ -83,6 +97,22 @@ export function ItemManager({ items: initialItems }: { items: ItemDTO[] }) {
       )
     );
     router.refresh();
+  }
+
+  async function handleDragEndForCategory(category: ItemType, event: DragEndEvent) {
+    const { active, over } = event;
+    if (!over || active.id === over.id) return;
+
+    const categoryItems = items.filter((i) => i.itemType === category);
+    const oldIndex = categoryItems.findIndex((i) => i.id === active.id);
+    const newIndex = categoryItems.findIndex((i) => i.id === over.id);
+    const reorderedCategory = arrayMove(categoryItems, oldIndex, newIndex);
+
+    const reordered = ITEM_TYPE_ORDER.flatMap((type) =>
+      type === category ? reorderedCategory : items.filter((i) => i.itemType === type)
+    );
+
+    await persistOrder(reordered);
   }
 
   async function handleToggleActive(item: ItemDTO) {
@@ -144,8 +174,30 @@ export function ItemManager({ items: initialItems }: { items: ItemDTO[] }) {
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectOption value="earning">支給項目</SelectOption>
-                        <SelectOption value="deduction">控除項目</SelectOption>
+                        {ITEM_TYPE_ORDER.map((type) => (
+                          <SelectOption key={type} value={type}>
+                            {ITEM_TYPE_LABEL[type]}
+                          </SelectOption>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  )}
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="scope">適用範囲</Label>
+                <Controller
+                  control={control}
+                  name="scope"
+                  render={({ field }) => (
+                    <Select value={field.value} onValueChange={field.onChange}>
+                      <SelectTrigger id="scope" className="w-full">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectOption value="salary">給与のみ</SelectOption>
+                        <SelectOption value="bonus">賞与のみ</SelectOption>
+                        <SelectOption value="both">両方</SelectOption>
                       </SelectContent>
                     </Select>
                   )}
@@ -159,15 +211,36 @@ export function ItemManager({ items: initialItems }: { items: ItemDTO[] }) {
         </Dialog>
       </div>
 
-      <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
-        <SortableContext items={items.map((i) => i.id)} strategy={verticalListSortingStrategy}>
-          <div className="space-y-2">
-            {items.map((item) => (
-              <SortableItemRow key={item.id} item={item} onToggleActive={handleToggleActive} />
-            ))}
-          </div>
-        </SortableContext>
-      </DndContext>
+      <div className="space-y-6">
+        {ITEM_TYPE_ORDER.map((category) => {
+          const categoryItems = items.filter((i) => i.itemType === category);
+          if (categoryItems.length === 0) return null;
+
+          return (
+            <div key={category} className="space-y-2">
+              <h2 className="text-sm font-semibold text-muted-foreground">
+                {ITEM_TYPE_LABEL[category]}
+              </h2>
+              <DndContext
+                sensors={sensors}
+                collisionDetection={closestCenter}
+                onDragEnd={(event) => handleDragEndForCategory(category, event)}
+              >
+                <SortableContext
+                  items={categoryItems.map((i) => i.id)}
+                  strategy={verticalListSortingStrategy}
+                >
+                  <div className="space-y-2">
+                    {categoryItems.map((item) => (
+                      <SortableItemRow key={item.id} item={item} onToggleActive={handleToggleActive} />
+                    ))}
+                  </div>
+                </SortableContext>
+              </DndContext>
+            </div>
+          );
+        })}
+      </div>
     </div>
   );
 }
@@ -196,10 +269,8 @@ function SortableItemRow({
         </button>
         <div className="flex-1">
           <p className="font-medium">{item.itemName}</p>
-          <p className="text-xs text-muted-foreground">
-            {item.itemType === "earning" ? "支給項目" : "控除項目"}
-          </p>
         </div>
+        <Badge variant="secondary">{SCOPE_LABEL[item.scope]}</Badge>
         <Switch checked={item.isActive} onCheckedChange={() => onToggleActive(item)} />
       </CardContent>
       </Card>

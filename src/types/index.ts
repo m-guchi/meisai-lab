@@ -27,11 +27,15 @@ export type BonusDTO = {
   deletedAt: string | null;
 };
 
+export type ItemType = "earning" | "otherEarning" | "statutoryDeduction" | "deduction";
+export type ItemScope = "salary" | "bonus" | "both";
+
 export type ItemDTO = {
   id: string;
   userId: string;
   itemName: string;
-  itemType: "earning" | "deduction";
+  itemType: ItemType;
+  scope: ItemScope;
   displayOrder: number;
   isActive: boolean;
   createdAt: string;
@@ -44,6 +48,7 @@ export type TaxSettingDTO = {
   year: number;
   healthInsuranceRate: string;
   pensionRate: string;
+  employmentInsuranceRate: string;
   incomeRateTaxFormula: string | null;
   createdAt: string;
   updatedAt: string;

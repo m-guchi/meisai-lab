@@ -6,25 +6,28 @@ import { useForm, Controller } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { format } from "date-fns";
-import { CalendarIcon } from "lucide-react";
 import { toast } from "sonner";
 
-import { calculateOvertime, calculateStatutoryInsurance } from "@/lib/calculations";
-import { cn } from "@/lib/utils";
+import { calculateStandardBonusAmount, calculateStatutoryInsurance } from "@/lib/calculations";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Calendar } from "@/components/ui/calendar";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { InsuranceComparisonHint } from "@/components/InsuranceComparisonHint";
-import type { ItemDTO, SalaryDTO, TaxSettingDTO } from "@/types";
+import type { BonusDTO, ItemDTO, TaxSettingDTO } from "@/types";
 
-const salaryFormSchema = z.object({
-  salaryDate: z.date({ error: "支給日は必須です" }),
-  baseSalary: z.number().positive("基本給は0より大きい数値が必須"),
-  overtimeHours: z.number().min(0).optional(),
-  standardMonthlyRemuneration: z.number().min(0).optional(),
+const bonusFormSchema = z.object({
+  bonusType: z.enum(["夏季", "冬季", "特別"]),
+  bonusDate: z.string().min(1, "支給日は必須です"),
+  baseAmount: z.number().positive("支給額は0より大きい数値が必須"),
+  standardBonusAmount: z.number().min(0).optional(),
   healthInsurance: z.number().min(0).optional(),
   pension: z.number().min(0).optional(),
   employmentInsurance: z.number().min(0).optional(),
@@ -34,7 +37,7 @@ const salaryFormSchema = z.object({
   memo: z.string().optional(),
 });
 
-type SalaryFormValues = z.infer<typeof salaryFormSchema>;
+type BonusFormValues = z.infer<typeof bonusFormSchema>;
 
 function parseDataNumber(data: Record<string, unknown> | undefined, key: string) {
   const value = data?.[key];
@@ -51,21 +54,23 @@ function initialCustomValues(data: Record<string, unknown> | undefined): Record<
   );
 }
 
-export function SalaryForm({
-  salary,
+function toDateInputValue(iso: string): string {
+  return format(new Date(iso), "yyyy-MM-dd");
+}
+
+export function BonusForm({
+  bonus,
   taxSetting,
   items = [],
-  previousStandardMonthlyRemuneration,
 }: {
-  salary?: SalaryDTO;
+  bonus?: BonusDTO;
   taxSetting?: TaxSettingDTO | null;
   items?: ItemDTO[];
-  previousStandardMonthlyRemuneration?: number;
 }) {
   const router = useRouter();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [customValues, setCustomValues] = useState<Record<string, number>>(() =>
-    initialCustomValues(salary?.data)
+    initialCustomValues(bonus?.data)
   );
 
   const earningItems = items.filter((item) => item.itemType === "earning");
@@ -83,40 +88,31 @@ export function SalaryForm({
     handleSubmit,
     watch,
     formState: { errors },
-  } = useForm<SalaryFormValues>({
-    resolver: zodResolver(salaryFormSchema),
+  } = useForm<BonusFormValues>({
+    resolver: zodResolver(bonusFormSchema),
     defaultValues: {
-      salaryDate: salary ? new Date(salary.salaryDate) : new Date(),
-      baseSalary: parseDataNumber(salary?.data, "baseGrossSalary") ?? 0,
-      overtimeHours: parseDataNumber(salary?.data, "overtimeHours") ?? 0,
-      standardMonthlyRemuneration:
-        parseDataNumber(salary?.data, "standardMonthlyRemuneration") ??
-        previousStandardMonthlyRemuneration ??
-        0,
-      healthInsurance: parseDataNumber(salary?.data, "healthInsurance"),
-      pension: parseDataNumber(salary?.data, "pension"),
-      employmentInsurance: parseDataNumber(salary?.data, "employmentInsurance"),
-      incomeTax: parseDataNumber(salary?.data, "incomeTax") ?? 0,
-      residentTax: parseDataNumber(salary?.data, "residentTax") ?? 0,
-      otherDeduction: parseDataNumber(salary?.data, "otherDeduction") ?? 0,
-      memo: salary?.memo ?? "",
+      bonusType: (bonus?.bonusType as BonusFormValues["bonusType"]) ?? "夏季",
+      bonusDate: bonus ? toDateInputValue(bonus.bonusDate) : "",
+      baseAmount: parseDataNumber(bonus?.data, "baseAmount") ?? 0,
+      standardBonusAmount: parseDataNumber(bonus?.data, "standardBonusAmount"),
+      healthInsurance: parseDataNumber(bonus?.data, "healthInsurance"),
+      pension: parseDataNumber(bonus?.data, "pension"),
+      employmentInsurance: parseDataNumber(bonus?.data, "employmentInsurance"),
+      incomeTax: parseDataNumber(bonus?.data, "incomeTax") ?? 0,
+      residentTax: parseDataNumber(bonus?.data, "residentTax") ?? 0,
+      otherDeduction: parseDataNumber(bonus?.data, "otherDeduction") ?? 0,
+      memo: bonus?.memo ?? "",
     },
   });
 
-  const baseSalary = watch("baseSalary") || 0;
-  const overtimeHours = watch("overtimeHours") || 0;
-  const standardMonthlyRemuneration = watch("standardMonthlyRemuneration") || 0;
+  const baseAmount = watch("baseAmount") || 0;
+  const standardBonusAmount = watch("standardBonusAmount");
   const healthInsurance = watch("healthInsurance");
   const pension = watch("pension");
   const employmentInsurance = watch("employmentInsurance");
   const incomeTax = watch("incomeTax") || 0;
   const residentTax = watch("residentTax") || 0;
   const otherDeduction = watch("otherDeduction") || 0;
-
-  const overtime = useMemo(
-    () => calculateOvertime({ baseSalary, overtimeHours }),
-    [baseSalary, overtimeHours]
-  );
 
   function customTotal(categoryItems: ItemDTO[]) {
     return categoryItems.reduce((sum, item) => sum + (customValues[item.id] || 0), 0);
@@ -127,26 +123,31 @@ export function SalaryForm({
   const customStatutoryDeductionTotal = customTotal(statutoryDeductionItems);
   const customDeductionTotal = customTotal(deductionItems);
 
-  const grossSalary =
-    baseSalary + overtime.overtimeAmount + customEarningTotal + customOtherEarningTotal;
+  const grossAmount = baseAmount + customEarningTotal + customOtherEarningTotal;
+
+  const standardBonusAmountDefault = useMemo(
+    () => calculateStandardBonusAmount(grossAmount),
+    [grossAmount]
+  );
+  const resolvedStandardBonusAmount = standardBonusAmount ?? standardBonusAmountDefault;
 
   const insuranceDefaults = useMemo(
     () =>
       calculateStatutoryInsurance({
-        standardAmount: standardMonthlyRemuneration,
-        grossPay: grossSalary,
+        standardAmount: resolvedStandardBonusAmount,
+        grossPay: grossAmount,
         healthInsuranceRate,
         pensionRate,
         employmentInsuranceRate,
       }),
-    [standardMonthlyRemuneration, grossSalary, healthInsuranceRate, pensionRate, employmentInsuranceRate]
+    [resolvedStandardBonusAmount, grossAmount, healthInsuranceRate, pensionRate, employmentInsuranceRate]
   );
 
   const resolvedHealthInsurance = healthInsurance ?? insuranceDefaults.healthInsurance;
   const resolvedPension = pension ?? insuranceDefaults.pension;
   const resolvedEmploymentInsurance = employmentInsurance ?? insuranceDefaults.employmentInsurance;
-  const netSalary =
-    grossSalary -
+  const netAmount =
+    grossAmount -
     resolvedHealthInsurance -
     resolvedPension -
     resolvedEmploymentInsurance -
@@ -161,7 +162,7 @@ export function SalaryForm({
     setCustomValues((prev) => ({ ...prev, [itemId]: Number.isFinite(parsed) ? parsed : 0 }));
   }
 
-  async function onSubmit(values: SalaryFormValues) {
+  async function onSubmit(values: BonusFormValues) {
     setIsSubmitting(true);
     try {
       const customItemValues = Object.fromEntries(
@@ -176,27 +177,26 @@ export function SalaryForm({
       );
 
       const payload = {
-        salaryDate: values.salaryDate.toISOString(),
-        grossSalary,
-        netSalary,
+        bonusType: values.bonusType,
+        bonusDate: new Date(values.bonusDate).toISOString(),
+        amount: grossAmount,
         memo: values.memo || undefined,
         data: {
-          baseGrossSalary: values.baseSalary,
-          overtimeHours: values.overtimeHours ?? 0,
-          overtime: overtime.overtimeAmount,
-          standardMonthlyRemuneration: values.standardMonthlyRemuneration ?? 0,
+          baseAmount: values.baseAmount,
+          standardBonusAmount: resolvedStandardBonusAmount,
           healthInsurance: -resolvedHealthInsurance,
           pension: -resolvedPension,
           employmentInsurance: -resolvedEmploymentInsurance,
           incomeTax: -incomeTax,
           residentTax: -residentTax,
           otherDeduction: -otherDeduction,
+          netAmount,
           customItemValues,
         },
       };
 
-      const res = await fetch(salary ? `/api/salaries/${salary.id}` : "/api/salaries", {
-        method: salary ? "PUT" : "POST",
+      const res = await fetch(bonus ? `/api/bonuses/${bonus.id}` : "/api/bonuses", {
+        method: bonus ? "PUT" : "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
       });
@@ -206,8 +206,8 @@ export function SalaryForm({
         return;
       }
 
-      toast.success(salary ? "給与を更新しました" : "給与を登録しました");
-      router.push("/salaries");
+      toast.success(bonus ? "賞与を更新しました" : "賞与を登録しました");
+      router.push("/bonuses");
       router.refresh();
     } finally {
       setIsSubmitting(false);
@@ -216,61 +216,44 @@ export function SalaryForm({
 
   return (
     <form onSubmit={handleSubmit(onSubmit)} className="max-w-xl space-y-6">
-      <div className="space-y-1.5">
-        <Label>支給日</Label>
-        <Controller
-          control={control}
-          name="salaryDate"
-          render={({ field }) => (
-            <Popover>
-              <PopoverTrigger asChild>
-                <Button
-                  type="button"
-                  variant="outline"
-                  className={cn("w-full justify-start text-left font-normal", !field.value && "text-muted-foreground")}
-                >
-                  <CalendarIcon className="mr-2 size-4" />
-                  {field.value ? format(field.value, "yyyy年MM月dd日") : "日付を選択"}
-                </Button>
-              </PopoverTrigger>
-              <PopoverContent className="w-auto p-0">
-                <Calendar
-                  mode="single"
-                  selected={field.value}
-                  onSelect={(date) => date && field.onChange(date)}
-                />
-              </PopoverContent>
-            </Popover>
-          )}
-        />
-        {errors.salaryDate && <p className="text-sm text-destructive">{errors.salaryDate.message}</p>}
+      <div className="grid grid-cols-2 gap-4">
+        <div className="space-y-1.5">
+          <Label htmlFor="bonusType">種別</Label>
+          <Controller
+            control={control}
+            name="bonusType"
+            render={({ field }) => (
+              <Select value={field.value} onValueChange={field.onChange}>
+                <SelectTrigger id="bonusType" className="w-full">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="夏季">夏季</SelectItem>
+                  <SelectItem value="冬季">冬季</SelectItem>
+                  <SelectItem value="特別">特別</SelectItem>
+                </SelectContent>
+              </Select>
+            )}
+          />
+        </div>
+        <div className="space-y-1.5">
+          <Label htmlFor="bonusDate">支給日</Label>
+          <Input id="bonusDate" type="date" {...register("bonusDate")} />
+          {errors.bonusDate && <p className="text-sm text-destructive">{errors.bonusDate.message}</p>}
+        </div>
       </div>
 
       <div className="space-y-3 rounded-md border p-3">
         <p className="text-sm font-medium">支給</p>
         <div className="space-y-1.5">
-          <Label htmlFor="baseSalary">基本給</Label>
+          <Label htmlFor="baseAmount">賞与支給額</Label>
           <Input
-            id="baseSalary"
+            id="baseAmount"
             type="number"
             step="1"
-            {...register("baseSalary", { valueAsNumber: true })}
+            {...register("baseAmount", { valueAsNumber: true })}
           />
-          {errors.baseSalary && <p className="text-sm text-destructive">{errors.baseSalary.message}</p>}
-        </div>
-
-        <div className="space-y-1.5">
-          <Label htmlFor="overtimeHours">残業時間</Label>
-          <Input
-            id="overtimeHours"
-            type="number"
-            step="0.5"
-            {...register("overtimeHours", { valueAsNumber: true })}
-          />
-          <p className="text-xs text-muted-foreground">
-            時給 {overtime.hourlyRate.toLocaleString()} 円 × {overtimeHours} 時間 = 残業代{" "}
-            {overtime.overtimeAmount.toLocaleString()} 円
-          </p>
+          {errors.baseAmount && <p className="text-sm text-destructive">{errors.baseAmount.message}</p>}
         </div>
 
         {earningItems.length > 0 && (
@@ -312,15 +295,16 @@ export function SalaryForm({
       <div className="space-y-3 rounded-md border p-3">
         <p className="text-sm font-medium">法定控除</p>
         <div className="space-y-1.5">
-          <Label htmlFor="standardMonthlyRemuneration">標準報酬月額</Label>
+          <Label htmlFor="standardBonusAmount">標準賞与額</Label>
           <Input
-            id="standardMonthlyRemuneration"
+            id="standardBonusAmount"
             type="number"
             step="1"
-            {...register("standardMonthlyRemuneration", { valueAsNumber: true })}
+            placeholder={String(standardBonusAmountDefault)}
+            {...register("standardBonusAmount", { valueAsNumber: true })}
           />
           <p className="text-xs text-muted-foreground">
-            定時決定・随時改定がない限り、前回登録時の値が引き継がれます。
+            自動計算: 支給総合計の1,000円未満を切り捨てた額（{standardBonusAmountDefault.toLocaleString()} 円）
           </p>
         </div>
 
@@ -417,17 +401,17 @@ export function SalaryForm({
       <div className="rounded-md border bg-muted/40 p-4 text-sm">
         <div className="flex justify-between">
           <span>支給額</span>
-          <span className="font-medium">{grossSalary.toLocaleString()} 円</span>
+          <span className="font-medium">{grossAmount.toLocaleString()} 円</span>
         </div>
         <div className="flex justify-between">
           <span>手取額</span>
-          <span className="font-medium">{netSalary.toLocaleString()} 円</span>
+          <span className="font-medium">{netAmount.toLocaleString()} 円</span>
         </div>
       </div>
 
       <div className="flex gap-2">
         <Button type="submit" disabled={isSubmitting}>
-          {salary ? "更新する" : "登録する"}
+          {bonus ? "更新する" : "登録する"}
         </Button>
         <Button type="button" variant="outline" onClick={() => router.back()}>
           キャンセル
