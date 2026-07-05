@@ -1,10 +1,13 @@
-// 年次データ（前年の給与・賞与合計、生命保険料支払額、ふるさと納税額）から住民税の月割額を推定する。
-// ユーザーの Excel シート（税金計算・本給シート）の数式を再現したもので、以下を前提とした簡略化：
+// 年次データ（前年の給与・賞与合計、生命保険料支払額、ふるさと納税額）から所得税の確定申告額・住民税の月割額を推定する。
+// ユーザーの Excel シート（資産管理.xlsx「税金計算」シート）の数式を再現したもので、以下を前提とした簡略化：
 // - 扶養親族等の数=0人（配偶者控除・扶養控除は考慮しない）
-// - 調整控除は市民1,500円+県民1,000円の定額近似（シートと同じ簡略化。合計所得2,500万円超などの一般ケースは非対応）
 // - 生命保険料控除は各保険種別ごとの上限のみ考慮し、3種合計の上限（実務上は住民税7万円・所得税12万円）は課さない
 // - 均等割・森林環境税は全国標準額（市区町村独自の上乗せは非対応）
-// - 令和7年分以降の税制（基礎控除のスライド式改正後）の数式を使用
+// - 給与所得控除・基礎控除は令和7年分以降の税制（スライド式改正後）の数式を固定で使用する
+//   （年度によって税制が異なる場合は、下記の `overrides` で該当項目を実際の金額に上書きする）
+//
+// 計算過程の各ステップは実際の申告書・課税決定通知書の金額で上書きできるようにしており（`overrides`）、
+// 上書きした値は下流のステップにも反映される（例: 給与所得を上書きすると基礎控除以降も再計算される）。
 
 export function getResidentTaxAssessmentYear(salaryDate: Date): number {
   const month = salaryDate.getMonth() + 1;
@@ -33,31 +36,8 @@ function calculateLifeInsuranceDeduction(
   return Math.max(deduction, 0);
 }
 
-export function calculateLifeInsuranceDeductionForIncomeTax(input: {
-  general: number;
-  careMedical: number;
-  pension: number;
-}): number {
-  const thresholds = { first: 20000, second: 40000, third: 80000 };
-  return (
-    calculateLifeInsuranceDeduction(input.general, thresholds) +
-    calculateLifeInsuranceDeduction(input.careMedical, thresholds) +
-    calculateLifeInsuranceDeduction(input.pension, thresholds)
-  );
-}
-
-export function calculateLifeInsuranceDeductionForResidentTax(input: {
-  general: number;
-  careMedical: number;
-  pension: number;
-}): number {
-  const thresholds = { first: 12000, second: 32000, third: 56000 };
-  return (
-    calculateLifeInsuranceDeduction(input.general, thresholds) +
-    calculateLifeInsuranceDeduction(input.careMedical, thresholds) +
-    calculateLifeInsuranceDeduction(input.pension, thresholds)
-  );
-}
+const LIFE_INSURANCE_THRESHOLDS_INCOME_TAX = { first: 20000, second: 40000, third: 80000 };
+const LIFE_INSURANCE_THRESHOLDS_RESIDENT_TAX = { first: 12000, second: 32000, third: 56000 };
 
 export function calculateBasicDeductionForIncomeTax(employmentIncome: number): number {
   const x = employmentIncome;
@@ -87,8 +67,20 @@ export function calculateIncomeTaxRate(taxableIncomeForIncomeTax: number): numbe
   if (x < 6950000) return 0.2;
   if (x < 9000000) return 0.23;
   if (x < 18000000) return 0.33;
-  if (x > 40000000) return 0.4;
+  if (x < 40000000) return 0.4;
   return 0.45;
+}
+
+export function calculateIncomeTaxAmount(taxableIncomeForIncomeTax: number): number {
+  const x = taxableIncomeForIncomeTax;
+  let tax = x * 0.05;
+  if (x > 1950000) tax += (x - 1950000) * 0.05;
+  if (x > 3300000) tax += (x - 3300000) * 0.1;
+  if (x > 6950000) tax += (x - 6950000) * 0.03;
+  if (x > 9000000) tax += (x - 9000000) * 0.1;
+  if (x > 18000000) tax += (x - 18000000) * 0.07;
+  if (x > 40000000) tax += (x - 40000000) * 0.05;
+  return tax;
 }
 
 const RESIDENT_TAX_RATE_CITY = 0.06;
@@ -100,84 +92,349 @@ const PER_CAPITA_LEVY_CITY = 3000;
 const PER_CAPITA_LEVY_PREFECTURE = 1000;
 const FOREST_ENVIRONMENT_TAX = 1000;
 
-export function calculateAnnualResidentTax(input: {
-  annualGrossIncome: number;
-  socialInsuranceTotal: number;
-  lifeInsuranceGeneral: number;
-  lifeInsuranceCareMedical: number;
-  lifeInsurancePension: number;
-  furusatoNozei: number;
-}): { annualTotal: number; elevenMonthAmount: number; juneAmount: number } {
-  const employmentIncome = calculateAnnualEmploymentIncome(input.annualGrossIncome);
+// 資産管理.xlsx「税金計算」シートB列と同じ項目・並び順
+export const RESIDENT_TAX_BREAKDOWN_FIELDS = [
+  // 共通
+  "annualGrossIncome",
+  "employmentIncome",
+  "socialInsuranceTotal",
+  "furusatoNozeiEffective",
+  // 所得税
+  "lifeInsuranceGeneralDeductionIncomeTax",
+  "lifeInsuranceCareMedicalDeductionIncomeTax",
+  "lifeInsurancePensionDeductionIncomeTax",
+  "lifeInsuranceForIncomeTax",
+  "basicDeductionForIncomeTax",
+  "furusatoDeductionForIncomeTax",
+  "incomeDeductionTotalForIncomeTax",
+  "taxableIncomeForIncomeTax",
+  "incomeTaxRate",
+  "incomeTaxAmount",
+  "flatTaxReduction2024",
+  "baseIncomeTaxAmount",
+  "reconstructionSurtax",
+  "incomeTaxAndSurtaxTotal",
+  "incomeTaxWithheldTotal",
+  "taxReturnPayment",
+  // 住民税
+  "lifeInsuranceGeneralDeductionResidentTax",
+  "lifeInsuranceCareMedicalDeductionResidentTax",
+  "lifeInsurancePensionDeductionResidentTax",
+  "lifeInsuranceForResidentTax",
+  "basicDeductionForResidentTax",
+  "incomeDeductionTotalForResidentTax",
+  "taxableIncomeForResidentTax",
+  "residentTaxRateCity",
+  "residentTaxRatePrefecture",
+  "incomeLeviedCity",
+  "incomeLeviedPrefecture",
+  "totalIncomeLevied",
+  "adjustmentDeductionCity",
+  "adjustmentDeductionPrefecture",
+  "adjustmentDeductionTotal",
+  "incomeLeviedAfterAdjustment",
+  "incomeLeviedAfterAdjustmentTimes02",
+  "furusatoNozeiLimit",
+  "donationBase",
+  "donationCreditBasic",
+  "donationCreditSpecial",
+  "donationCreditCity",
+  "donationCreditPrefecture",
+  "taxCreditCity",
+  "taxCreditPrefecture",
+  "incomeLeviedCityFinal",
+  "incomeLeviedPrefectureFinal",
+  "perCapitaLevyCity",
+  "perCapitaLevyPrefecture",
+  "forestEnvironmentTax",
+  "annualTotal",
+  "elevenMonthAmount",
+  "juneAmount",
+] as const;
 
-  // ふるさと納税特例分の算出に所得税率が必要なため、所得税側の課税所得も計算する
-  const lifeInsuranceForIncomeTax = calculateLifeInsuranceDeductionForIncomeTax({
-    general: input.lifeInsuranceGeneral,
-    careMedical: input.lifeInsuranceCareMedical,
-    pension: input.lifeInsurancePension,
-  });
-  const basicDeductionForIncomeTax = calculateBasicDeductionForIncomeTax(employmentIncome);
-  const furusatoDeductionForIncomeTax = Math.max(input.furusatoNozei - 2000, 0);
-  const incomeDeductionTotalForIncomeTax =
-    input.socialInsuranceTotal +
-    lifeInsuranceForIncomeTax +
-    basicDeductionForIncomeTax +
-    furusatoDeductionForIncomeTax;
-  const taxableIncomeForIncomeTax = Math.floor(
-    Math.max(employmentIncome - incomeDeductionTotalForIncomeTax, 0) / 1000
-  ) * 1000;
-  const incomeTaxRate = calculateIncomeTaxRate(taxableIncomeForIncomeTax);
+export type ResidentTaxBreakdownField = (typeof RESIDENT_TAX_BREAKDOWN_FIELDS)[number];
 
-  // 住民税側
-  const lifeInsuranceForResidentTax = calculateLifeInsuranceDeductionForResidentTax({
-    general: input.lifeInsuranceGeneral,
-    careMedical: input.lifeInsuranceCareMedical,
-    pension: input.lifeInsurancePension,
-  });
-  const basicDeductionForResidentTax = calculateBasicDeductionForResidentTax(employmentIncome);
-  const incomeDeductionTotalForResidentTax =
-    input.socialInsuranceTotal + lifeInsuranceForResidentTax + basicDeductionForResidentTax;
-  const taxableIncomeForResidentTax = Math.floor(
-    Math.max(employmentIncome - incomeDeductionTotalForResidentTax, 0) / 1000
-  ) * 1000;
+export type ResidentTaxOverrides = Partial<Record<ResidentTaxBreakdownField, number>>;
 
-  const incomeLeviedCity = taxableIncomeForResidentTax * RESIDENT_TAX_RATE_CITY;
-  const incomeLeviedPrefecture = taxableIncomeForResidentTax * RESIDENT_TAX_RATE_PREFECTURE;
+export type BreakdownValue = { auto: number; value: number };
 
-  const donationBase = Math.max(input.furusatoNozei - 2000, 0);
-  const donationCreditBasic = donationBase * 0.1;
-  const totalIncomeLevied = incomeLeviedCity + incomeLeviedPrefecture;
-  const adjustmentDeductionTotal = ADJUSTMENT_DEDUCTION_CITY + ADJUSTMENT_DEDUCTION_PREFECTURE;
-  const incomeLeviedAfterAdjustment = totalIncomeLevied - adjustmentDeductionTotal;
-  const donationCreditSpecial = Math.min(
-    incomeLeviedAfterAdjustment * 0.2,
-    donationBase * (1 - 0.1 - incomeTaxRate * 1.021)
+export type AnnualResidentTaxBreakdown = Record<ResidentTaxBreakdownField, BreakdownValue>;
+
+export function calculateAnnualResidentTax(
+  input: {
+    annualGrossIncome: number;
+    socialInsuranceTotal: number;
+    lifeInsuranceGeneral: number;
+    lifeInsuranceCareMedical: number;
+    lifeInsurancePension: number;
+    furusatoNozei: number;
+    incomeTaxWithheldTotal: number;
+  },
+  overrides: ResidentTaxOverrides = {}
+): AnnualResidentTaxBreakdown {
+  function resolve(field: ResidentTaxBreakdownField, auto: number): BreakdownValue {
+    const override = overrides[field];
+    const value = typeof override === "number" && !Number.isNaN(override) ? override : auto;
+    return { auto, value };
+  }
+
+  // --- 共通 ---
+  const annualGrossIncome = resolve("annualGrossIncome", input.annualGrossIncome);
+  const employmentIncome = resolve(
+    "employmentIncome",
+    calculateAnnualEmploymentIncome(annualGrossIncome.value)
   );
-  const donationCreditTotal = donationCreditBasic + donationCreditSpecial;
-  const donationCreditCity = Math.ceil(donationCreditTotal * 0.6);
-  const donationCreditPrefecture = Math.ceil(donationCreditTotal * 0.4);
+  const socialInsuranceTotal = resolve("socialInsuranceTotal", input.socialInsuranceTotal);
+  const furusatoNozeiEffective = resolve("furusatoNozeiEffective", input.furusatoNozei);
 
-  const taxCreditCity = ADJUSTMENT_DEDUCTION_CITY + donationCreditCity;
-  const taxCreditPrefecture = ADJUSTMENT_DEDUCTION_PREFECTURE + donationCreditPrefecture;
-
-  const incomeLeviedCityFinal = Math.max(
-    Math.floor((incomeLeviedCity - taxCreditCity) / 100) * 100,
-    0
+  // --- 所得税 ---
+  const lifeInsuranceGeneralDeductionIncomeTax = resolve(
+    "lifeInsuranceGeneralDeductionIncomeTax",
+    calculateLifeInsuranceDeduction(input.lifeInsuranceGeneral, LIFE_INSURANCE_THRESHOLDS_INCOME_TAX)
   );
-  const incomeLeviedPrefectureFinal = Math.max(
-    Math.floor((incomeLeviedPrefecture - taxCreditPrefecture) / 100) * 100,
-    0
+  const lifeInsuranceCareMedicalDeductionIncomeTax = resolve(
+    "lifeInsuranceCareMedicalDeductionIncomeTax",
+    calculateLifeInsuranceDeduction(input.lifeInsuranceCareMedical, LIFE_INSURANCE_THRESHOLDS_INCOME_TAX)
+  );
+  const lifeInsurancePensionDeductionIncomeTax = resolve(
+    "lifeInsurancePensionDeductionIncomeTax",
+    calculateLifeInsuranceDeduction(input.lifeInsurancePension, LIFE_INSURANCE_THRESHOLDS_INCOME_TAX)
+  );
+  const lifeInsuranceForIncomeTax = resolve(
+    "lifeInsuranceForIncomeTax",
+    lifeInsuranceGeneralDeductionIncomeTax.value +
+      lifeInsuranceCareMedicalDeductionIncomeTax.value +
+      lifeInsurancePensionDeductionIncomeTax.value
+  );
+  const basicDeductionForIncomeTax = resolve(
+    "basicDeductionForIncomeTax",
+    calculateBasicDeductionForIncomeTax(employmentIncome.value)
+  );
+  const furusatoDeductionForIncomeTax = resolve(
+    "furusatoDeductionForIncomeTax",
+    Math.max(furusatoNozeiEffective.value - 2000, 0)
+  );
+  const incomeDeductionTotalForIncomeTax = resolve(
+    "incomeDeductionTotalForIncomeTax",
+    socialInsuranceTotal.value +
+      lifeInsuranceForIncomeTax.value +
+      basicDeductionForIncomeTax.value +
+      furusatoDeductionForIncomeTax.value
+  );
+  const taxableIncomeForIncomeTax = resolve(
+    "taxableIncomeForIncomeTax",
+    Math.floor(
+      Math.max(employmentIncome.value - incomeDeductionTotalForIncomeTax.value, 0) / 1000
+    ) * 1000
+  );
+  const incomeTaxRate = resolve(
+    "incomeTaxRate",
+    calculateIncomeTaxRate(taxableIncomeForIncomeTax.value)
+  );
+  const incomeTaxAmount = resolve(
+    "incomeTaxAmount",
+    calculateIncomeTaxAmount(taxableIncomeForIncomeTax.value)
+  );
+  // 令和6年分のみ実施された一時的な制度のため、既定値は0円（対象年度のみ上書きで入力する）
+  const flatTaxReduction2024 = resolve("flatTaxReduction2024", 0);
+  const baseIncomeTaxAmount = resolve(
+    "baseIncomeTaxAmount",
+    incomeTaxAmount.value - flatTaxReduction2024.value
+  );
+  const reconstructionSurtax = resolve(
+    "reconstructionSurtax",
+    Math.floor(baseIncomeTaxAmount.value * 0.021)
+  );
+  const incomeTaxAndSurtaxTotal = resolve(
+    "incomeTaxAndSurtaxTotal",
+    baseIncomeTaxAmount.value + reconstructionSurtax.value
+  );
+  const incomeTaxWithheldTotal = resolve("incomeTaxWithheldTotal", input.incomeTaxWithheldTotal);
+  const taxReturnPayment = resolve(
+    "taxReturnPayment",
+    incomeTaxAndSurtaxTotal.value - incomeTaxWithheldTotal.value
   );
 
-  const annualTotal =
-    incomeLeviedCityFinal +
-    incomeLeviedPrefectureFinal +
-    PER_CAPITA_LEVY_CITY +
-    PER_CAPITA_LEVY_PREFECTURE +
-    FOREST_ENVIRONMENT_TAX;
+  // --- 住民税 ---
+  const lifeInsuranceGeneralDeductionResidentTax = resolve(
+    "lifeInsuranceGeneralDeductionResidentTax",
+    calculateLifeInsuranceDeduction(input.lifeInsuranceGeneral, LIFE_INSURANCE_THRESHOLDS_RESIDENT_TAX)
+  );
+  const lifeInsuranceCareMedicalDeductionResidentTax = resolve(
+    "lifeInsuranceCareMedicalDeductionResidentTax",
+    calculateLifeInsuranceDeduction(input.lifeInsuranceCareMedical, LIFE_INSURANCE_THRESHOLDS_RESIDENT_TAX)
+  );
+  const lifeInsurancePensionDeductionResidentTax = resolve(
+    "lifeInsurancePensionDeductionResidentTax",
+    calculateLifeInsuranceDeduction(input.lifeInsurancePension, LIFE_INSURANCE_THRESHOLDS_RESIDENT_TAX)
+  );
+  const lifeInsuranceForResidentTax = resolve(
+    "lifeInsuranceForResidentTax",
+    lifeInsuranceGeneralDeductionResidentTax.value +
+      lifeInsuranceCareMedicalDeductionResidentTax.value +
+      lifeInsurancePensionDeductionResidentTax.value
+  );
+  const basicDeductionForResidentTax = resolve(
+    "basicDeductionForResidentTax",
+    calculateBasicDeductionForResidentTax(employmentIncome.value)
+  );
+  const incomeDeductionTotalForResidentTax = resolve(
+    "incomeDeductionTotalForResidentTax",
+    socialInsuranceTotal.value + lifeInsuranceForResidentTax.value + basicDeductionForResidentTax.value
+  );
+  const taxableIncomeForResidentTax = resolve(
+    "taxableIncomeForResidentTax",
+    Math.floor(
+      Math.max(employmentIncome.value - incomeDeductionTotalForResidentTax.value, 0) / 1000
+    ) * 1000
+  );
+  const residentTaxRateCity = resolve("residentTaxRateCity", RESIDENT_TAX_RATE_CITY);
+  const residentTaxRatePrefecture = resolve("residentTaxRatePrefecture", RESIDENT_TAX_RATE_PREFECTURE);
 
-  const elevenMonthAmount = Math.floor(annualTotal / 12 / 100) * 100;
-  const juneAmount = annualTotal - elevenMonthAmount * 11;
+  const incomeLeviedCity = resolve(
+    "incomeLeviedCity",
+    taxableIncomeForResidentTax.value * residentTaxRateCity.value
+  );
+  const incomeLeviedPrefecture = resolve(
+    "incomeLeviedPrefecture",
+    taxableIncomeForResidentTax.value * residentTaxRatePrefecture.value
+  );
+  const totalIncomeLevied = resolve(
+    "totalIncomeLevied",
+    incomeLeviedCity.value + incomeLeviedPrefecture.value
+  );
+  const adjustmentDeductionCity = resolve("adjustmentDeductionCity", ADJUSTMENT_DEDUCTION_CITY);
+  const adjustmentDeductionPrefecture = resolve(
+    "adjustmentDeductionPrefecture",
+    ADJUSTMENT_DEDUCTION_PREFECTURE
+  );
+  const adjustmentDeductionTotal = resolve(
+    "adjustmentDeductionTotal",
+    adjustmentDeductionCity.value + adjustmentDeductionPrefecture.value
+  );
+  const incomeLeviedAfterAdjustment = resolve(
+    "incomeLeviedAfterAdjustment",
+    totalIncomeLevied.value - adjustmentDeductionTotal.value
+  );
+  const incomeLeviedAfterAdjustmentTimes02 = resolve(
+    "incomeLeviedAfterAdjustmentTimes02",
+    incomeLeviedAfterAdjustment.value * 0.2
+  );
+  const furusatoNozeiLimit = resolve(
+    "furusatoNozeiLimit",
+    incomeLeviedAfterAdjustmentTimes02.value / (1 - 0.1 - incomeTaxRate.value * 1.021) + 2000
+  );
 
-  return { annualTotal, elevenMonthAmount, juneAmount };
+  const donationBase = resolve("donationBase", Math.max(furusatoNozeiEffective.value - 2000, 0));
+  const donationCreditBasic = resolve("donationCreditBasic", donationBase.value * 0.1);
+  const donationCreditSpecial = resolve(
+    "donationCreditSpecial",
+    Math.min(
+      incomeLeviedAfterAdjustmentTimes02.value,
+      donationBase.value * (1 - 0.1 - incomeTaxRate.value * 1.021)
+    )
+  );
+  const donationCreditTotal = donationCreditBasic.value + donationCreditSpecial.value;
+  const residentTaxRateTotal = residentTaxRateCity.value + residentTaxRatePrefecture.value;
+  const donationCreditCity = resolve(
+    "donationCreditCity",
+    Math.ceil(donationCreditTotal * (residentTaxRateCity.value / residentTaxRateTotal))
+  );
+  const donationCreditPrefecture = resolve(
+    "donationCreditPrefecture",
+    Math.ceil(donationCreditTotal * (residentTaxRatePrefecture.value / residentTaxRateTotal))
+  );
+
+  const taxCreditCity = resolve(
+    "taxCreditCity",
+    adjustmentDeductionCity.value + donationCreditCity.value
+  );
+  const taxCreditPrefecture = resolve(
+    "taxCreditPrefecture",
+    adjustmentDeductionPrefecture.value + donationCreditPrefecture.value
+  );
+
+  const incomeLeviedCityFinal = resolve(
+    "incomeLeviedCityFinal",
+    Math.max(Math.floor((incomeLeviedCity.value - taxCreditCity.value) / 100) * 100, 0)
+  );
+  const incomeLeviedPrefectureFinal = resolve(
+    "incomeLeviedPrefectureFinal",
+    Math.max(Math.floor((incomeLeviedPrefecture.value - taxCreditPrefecture.value) / 100) * 100, 0)
+  );
+
+  const perCapitaLevyCity = resolve("perCapitaLevyCity", PER_CAPITA_LEVY_CITY);
+  const perCapitaLevyPrefecture = resolve("perCapitaLevyPrefecture", PER_CAPITA_LEVY_PREFECTURE);
+  const forestEnvironmentTax = resolve("forestEnvironmentTax", FOREST_ENVIRONMENT_TAX);
+
+  const annualTotal = resolve(
+    "annualTotal",
+    incomeLeviedCityFinal.value +
+      incomeLeviedPrefectureFinal.value +
+      perCapitaLevyCity.value +
+      perCapitaLevyPrefecture.value +
+      forestEnvironmentTax.value
+  );
+
+  const elevenMonthAmount = resolve(
+    "elevenMonthAmount",
+    Math.floor(annualTotal.value / 12 / 100) * 100
+  );
+  const juneAmount = resolve("juneAmount", annualTotal.value - elevenMonthAmount.value * 11);
+
+  return {
+    annualGrossIncome,
+    employmentIncome,
+    socialInsuranceTotal,
+    furusatoNozeiEffective,
+    lifeInsuranceGeneralDeductionIncomeTax,
+    lifeInsuranceCareMedicalDeductionIncomeTax,
+    lifeInsurancePensionDeductionIncomeTax,
+    lifeInsuranceForIncomeTax,
+    basicDeductionForIncomeTax,
+    furusatoDeductionForIncomeTax,
+    incomeDeductionTotalForIncomeTax,
+    taxableIncomeForIncomeTax,
+    incomeTaxRate,
+    incomeTaxAmount,
+    flatTaxReduction2024,
+    baseIncomeTaxAmount,
+    reconstructionSurtax,
+    incomeTaxAndSurtaxTotal,
+    incomeTaxWithheldTotal,
+    taxReturnPayment,
+    lifeInsuranceGeneralDeductionResidentTax,
+    lifeInsuranceCareMedicalDeductionResidentTax,
+    lifeInsurancePensionDeductionResidentTax,
+    lifeInsuranceForResidentTax,
+    basicDeductionForResidentTax,
+    incomeDeductionTotalForResidentTax,
+    taxableIncomeForResidentTax,
+    residentTaxRateCity,
+    residentTaxRatePrefecture,
+    incomeLeviedCity,
+    incomeLeviedPrefecture,
+    totalIncomeLevied,
+    adjustmentDeductionCity,
+    adjustmentDeductionPrefecture,
+    adjustmentDeductionTotal,
+    incomeLeviedAfterAdjustment,
+    incomeLeviedAfterAdjustmentTimes02,
+    furusatoNozeiLimit,
+    donationBase,
+    donationCreditBasic,
+    donationCreditSpecial,
+    donationCreditCity,
+    donationCreditPrefecture,
+    taxCreditCity,
+    taxCreditPrefecture,
+    incomeLeviedCityFinal,
+    incomeLeviedPrefectureFinal,
+    perCapitaLevyCity,
+    perCapitaLevyPrefecture,
+    forestEnvironmentTax,
+    annualTotal,
+    elevenMonthAmount,
+    juneAmount,
+  };
 }

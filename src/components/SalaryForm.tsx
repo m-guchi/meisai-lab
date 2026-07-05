@@ -6,7 +6,6 @@ import { useForm, Controller } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { format } from "date-fns";
-import { CalendarIcon } from "lucide-react";
 import { toast } from "sonner";
 
 import {
@@ -15,18 +14,18 @@ import {
   calculateWithholdingIncomeTax,
 } from "@/lib/calculations";
 import { calculateAnnualResidentTax, getResidentTaxAssessmentYear } from "@/lib/annualTax";
-import { cn, resolveManualNumber } from "@/lib/utils";
+import { resolveManualNumber } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { AmountInput } from "@/components/ui/amount-input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Calendar } from "@/components/ui/calendar";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { AutoCalcHint } from "@/components/AutoCalcHint";
 import type { ItemDTO, SalaryDTO, TaxSettingDTO } from "@/types";
+import type { AnnualTaxEntry } from "@/lib/annualTaxData";
 
 const salaryFormSchema = z.object({
-  salaryDate: z.date({ error: "支給日は必須です" }),
+  salaryDate: z.string().min(1, "支給日は必須です"),
   baseSalary: z.number().positive("基本給は0より大きい数値が必須"),
   overtimeHours: z.number().min(0).optional(),
   overtimeAmount: z.number().min(0).optional(),
@@ -36,27 +35,22 @@ const salaryFormSchema = z.object({
   employmentInsurance: z.number().min(0).optional(),
   incomeTax: z.number().min(0).optional(),
   residentTax: z.number().min(0).optional(),
-  otherDeduction: z.number().min(0).optional(),
   memo: z.string().optional(),
 });
 
 type SalaryFormValues = z.infer<typeof salaryFormSchema>;
-
-type AnnualTaxEntry = {
-  grossIncome: number;
-  socialInsuranceTotal: number;
-  lifeInsuranceGeneral: number;
-  lifeInsuranceCareMedical: number;
-  lifeInsurancePension: number;
-  furusatoNozei: number;
-};
 
 function parseDataNumber(data: Record<string, unknown> | undefined, key: string) {
   const value = data?.[key];
   return typeof value === "number" ? value : undefined;
 }
 
-function initialCustomValues(data: Record<string, unknown> | undefined): Record<string, number> {
+function parseAbsDataNumber(data: Record<string, unknown> | undefined, key: string) {
+  const value = parseDataNumber(data, key);
+  return value === undefined ? undefined : Math.abs(value);
+}
+
+function extractCustomItemValues(data: Record<string, unknown> | undefined): Record<string, number> {
   const raw = data?.customItemValues;
   if (!raw || typeof raw !== "object") return {};
   return Object.fromEntries(
@@ -64,6 +58,17 @@ function initialCustomValues(data: Record<string, unknown> | undefined): Record<
       .filter((entry): entry is [string, number] => typeof entry[1] === "number")
       .map(([id, value]) => [id, Math.abs(value)])
   );
+}
+
+function initialCustomValues(
+  data: Record<string, unknown> | undefined,
+  previousData: Record<string, unknown> | undefined
+): Record<string, number> {
+  return { ...extractCustomItemValues(previousData), ...extractCustomItemValues(data) };
+}
+
+function toDateInputValue(iso: string): string {
+  return format(new Date(iso), "yyyy-MM-dd");
 }
 
 export function SalaryForm({
@@ -84,7 +89,7 @@ export function SalaryForm({
   const router = useRouter();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [customValues, setCustomValues] = useState<Record<string, number>>(() =>
-    initialCustomValues(salary?.data)
+    initialCustomValues(salary?.data, previousSalaryData)
   );
 
   const earningItems = items.filter((item) => item.itemType === "earning");
@@ -106,20 +111,21 @@ export function SalaryForm({
   } = useForm<SalaryFormValues>({
     resolver: zodResolver(salaryFormSchema),
     defaultValues: {
-      salaryDate: salary ? new Date(salary.salaryDate) : new Date(),
-      baseSalary: parseDataNumber(salary?.data, "baseGrossSalary"),
+      salaryDate: salary ? toDateInputValue(salary.salaryDate) : toDateInputValue(new Date().toISOString()),
+      baseSalary:
+        parseDataNumber(salary?.data, "baseGrossSalary") ??
+        parseDataNumber(previousSalaryData, "baseGrossSalary"),
       overtimeHours: parseDataNumber(salary?.data, "overtimeHours") ?? 0,
       overtimeAmount: parseDataNumber(salary?.data, "overtime"),
       standardMonthlyRemuneration:
         parseDataNumber(salary?.data, "standardMonthlyRemuneration") ??
         previousStandardMonthlyRemuneration ??
         0,
-      healthInsurance: parseDataNumber(salary?.data, "healthInsurance"),
-      pension: parseDataNumber(salary?.data, "pension"),
-      employmentInsurance: parseDataNumber(salary?.data, "employmentInsurance"),
-      incomeTax: parseDataNumber(salary?.data, "incomeTax"),
-      residentTax: parseDataNumber(salary?.data, "residentTax"),
-      otherDeduction: parseDataNumber(salary?.data, "otherDeduction"),
+      healthInsurance: parseAbsDataNumber(salary?.data, "healthInsurance"),
+      pension: parseAbsDataNumber(salary?.data, "pension"),
+      employmentInsurance: parseAbsDataNumber(salary?.data, "employmentInsurance"),
+      incomeTax: parseAbsDataNumber(salary?.data, "incomeTax"),
+      residentTax: parseAbsDataNumber(salary?.data, "residentTax"),
       memo: salary?.memo ?? "",
     },
   });
@@ -133,7 +139,6 @@ export function SalaryForm({
   const employmentInsurance = watch("employmentInsurance");
   const incomeTax = watch("incomeTax");
   const residentTax = watch("residentTax");
-  const otherDeduction = watch("otherDeduction") || 0;
   const salaryDate = watch("salaryDate");
 
   const overtime = useMemo(
@@ -165,12 +170,12 @@ export function SalaryForm({
     () =>
       calculateStatutoryInsurance({
         standardAmount: standardMonthlyRemuneration,
-        grossPay: grossSalary,
+        grossPay: earningSectionTotal,
         healthInsuranceRate,
         pensionRate,
         employmentInsuranceRate,
       }),
-    [standardMonthlyRemuneration, grossSalary, healthInsuranceRate, pensionRate, employmentInsuranceRate]
+    [standardMonthlyRemuneration, earningSectionTotal, healthInsuranceRate, pensionRate, employmentInsuranceRate]
   );
 
   const resolvedHealthInsurance = resolveManualNumber(healthInsurance, insuranceDefaults.healthInsurance);
@@ -201,26 +206,37 @@ export function SalaryForm({
   );
   const resolvedIncomeTax = resolveManualNumber(incomeTax, incomeTaxAuto);
 
-  const assessmentYear = useMemo(() => getResidentTaxAssessmentYear(salaryDate), [salaryDate]);
+  const salaryDateValue = useMemo(
+    () => (salaryDate ? new Date(salaryDate) : new Date()),
+    [salaryDate]
+  );
+  const assessmentYear = useMemo(
+    () => getResidentTaxAssessmentYear(salaryDateValue),
+    [salaryDateValue]
+  );
   const annualEntry = annualTaxData?.[assessmentYear];
   const residentTaxAuto = useMemo(
     () =>
       annualEntry
-        ? calculateAnnualResidentTax({
-            annualGrossIncome: annualEntry.grossIncome,
-            socialInsuranceTotal: annualEntry.socialInsuranceTotal,
-            lifeInsuranceGeneral: annualEntry.lifeInsuranceGeneral,
-            lifeInsuranceCareMedical: annualEntry.lifeInsuranceCareMedical,
-            lifeInsurancePension: annualEntry.lifeInsurancePension,
-            furusatoNozei: annualEntry.furusatoNozei,
-          })
+        ? calculateAnnualResidentTax(
+            {
+              annualGrossIncome: annualEntry.grossIncome,
+              socialInsuranceTotal: annualEntry.socialInsuranceTotal,
+              lifeInsuranceGeneral: annualEntry.lifeInsuranceGeneral,
+              lifeInsuranceCareMedical: annualEntry.lifeInsuranceCareMedical,
+              lifeInsurancePension: annualEntry.lifeInsurancePension,
+              furusatoNozei: annualEntry.furusatoNozei,
+              incomeTaxWithheldTotal: annualEntry.incomeTaxWithheldTotal,
+            },
+            annualEntry.overrides
+          )
         : undefined,
     [annualEntry]
   );
   const residentTaxAutoAmount = residentTaxAuto
-    ? salaryDate.getMonth() === 5
-      ? residentTaxAuto.juneAmount
-      : residentTaxAuto.elevenMonthAmount
+    ? salaryDateValue.getMonth() === 5
+      ? residentTaxAuto.juneAmount.value
+      : residentTaxAuto.elevenMonthAmount.value
     : undefined;
   const resolvedResidentTax = resolveManualNumber(residentTax, residentTaxAutoAmount ?? 0);
 
@@ -231,7 +247,7 @@ export function SalaryForm({
     resolvedIncomeTax +
     resolvedResidentTax +
     customStatutoryDeductionTotal;
-  const deductionSectionTotal = otherDeduction + customDeductionTotal;
+  const deductionSectionTotal = customDeductionTotal;
 
   const netSalary =
     grossSalary -
@@ -240,19 +256,11 @@ export function SalaryForm({
     resolvedEmploymentInsurance -
     resolvedIncomeTax -
     resolvedResidentTax -
-    otherDeduction -
     customStatutoryDeductionTotal -
     customDeductionTotal;
 
   function handleCustomValueChange(itemId: string, value: number | undefined) {
     setCustomValues((prev) => ({ ...prev, [itemId]: value ?? 0 }));
-  }
-
-  function customPlaceholder(itemId: string): string | undefined {
-    const raw = previousSalaryData?.customItemValues;
-    if (!raw || typeof raw !== "object") return undefined;
-    const value = (raw as Record<string, unknown>)[itemId];
-    return typeof value === "number" ? String(Math.abs(value)) : undefined;
   }
 
   async function onSubmit(values: SalaryFormValues) {
@@ -270,7 +278,7 @@ export function SalaryForm({
       );
 
       const payload = {
-        salaryDate: values.salaryDate.toISOString(),
+        salaryDate: new Date(values.salaryDate).toISOString(),
         grossSalary,
         netSalary,
         memo: values.memo || undefined,
@@ -284,7 +292,6 @@ export function SalaryForm({
           employmentInsurance: -resolvedEmploymentInsurance,
           incomeTax: -resolvedIncomeTax,
           residentTax: -resolvedResidentTax,
-          otherDeduction: -otherDeduction,
           customItemValues,
         },
       };
@@ -311,32 +318,8 @@ export function SalaryForm({
   return (
     <form onSubmit={handleSubmit(onSubmit)} className="max-w-xl space-y-6">
       <div className="space-y-1.5">
-        <Label>支給日</Label>
-        <Controller
-          control={control}
-          name="salaryDate"
-          render={({ field }) => (
-            <Popover>
-              <PopoverTrigger asChild>
-                <Button
-                  type="button"
-                  variant="outline"
-                  className={cn("w-full justify-start text-left font-normal", !field.value && "text-muted-foreground")}
-                >
-                  <CalendarIcon className="mr-2 size-4" />
-                  {field.value ? format(field.value, "yyyy年MM月dd日") : "日付を選択"}
-                </Button>
-              </PopoverTrigger>
-              <PopoverContent className="w-auto p-0">
-                <Calendar
-                  mode="single"
-                  selected={field.value}
-                  onSelect={(date) => date && field.onChange(date)}
-                />
-              </PopoverContent>
-            </Popover>
-          )}
-        />
+        <Label htmlFor="salaryDate">支給日</Label>
+        <Input id="salaryDate" type="date" {...register("salaryDate")} />
         {errors.salaryDate && <p className="text-sm text-destructive">{errors.salaryDate.message}</p>}
       </div>
 
@@ -348,56 +331,49 @@ export function SalaryForm({
             control={control}
             name="baseSalary"
             render={({ field }) => (
-              <AmountInput
-                id="baseSalary"
-                placeholder={
-                  parseDataNumber(previousSalaryData, "baseGrossSalary") !== undefined
-                    ? String(parseDataNumber(previousSalaryData, "baseGrossSalary"))
-                    : undefined
-                }
-                value={field.value}
-                onChange={field.onChange}
-              />
+              <AmountInput id="baseSalary" value={field.value} onChange={field.onChange} />
             )}
           />
           {errors.baseSalary && <p className="text-sm text-destructive">{errors.baseSalary.message}</p>}
         </div>
 
-        <div className="space-y-1.5">
-          <Label htmlFor="overtimeHours">残業時間</Label>
-          <Controller
-            control={control}
-            name="overtimeHours"
-            render={({ field }) => (
-              <AmountInput id="overtimeHours" value={field.value} onChange={field.onChange} />
-            )}
-          />
-          <p className="text-xs text-muted-foreground">
-            時給 {overtime.hourlyRate.toLocaleString()} 円 × {overtimeHours} 時間 = 残業代{" "}
-            {overtime.overtimeAmount.toLocaleString()} 円
-          </p>
-        </div>
+        <div className="grid grid-cols-2 gap-4">
+          <div className="space-y-1.5">
+            <Label htmlFor="overtimeAmount">超勤手当</Label>
+            <Controller
+              control={control}
+              name="overtimeAmount"
+              render={({ field }) => (
+                <AmountInput
+                  id="overtimeAmount"
+                  placeholder={
+                    overtimeAmountPlaceholder !== undefined
+                      ? overtimeAmountPlaceholder.toLocaleString()
+                      : undefined
+                  }
+                  value={field.value}
+                  onChange={field.onChange}
+                />
+              )}
+            />
+          </div>
 
-        <div className="space-y-1.5">
-          <Label htmlFor="overtimeAmount">超勤手当</Label>
-          <Controller
-            control={control}
-            name="overtimeAmount"
-            render={({ field }) => (
-              <AmountInput
-                id="overtimeAmount"
-                placeholder={
-                  overtimeAmountPlaceholder !== undefined ? String(overtimeAmountPlaceholder) : undefined
-                }
-                value={field.value}
-                onChange={field.onChange}
-              />
-            )}
-          />
-          {overtimeHours > 0 && (
-            <AutoCalcHint manualValue={overtimeAmount} autoValue={overtime.overtimeAmount} />
-          )}
+          <div className="space-y-1.5">
+            <Label htmlFor="overtimeHours">残業時間(h)</Label>
+            <Controller
+              control={control}
+              name="overtimeHours"
+              render={({ field }) => (
+                <AmountInput id="overtimeHours" value={field.value} onChange={field.onChange} />
+              )}
+            />
+          </div>
         </div>
+        {overtimeHours > 0 && overtimeAmount !== undefined && !Number.isNaN(overtimeAmount) && (
+          <p className="text-xs text-muted-foreground">
+            時給換算: {(Math.round((overtimeAmount / overtimeHours) * 100) / 100).toLocaleString()} 円
+          </p>
+        )}
 
         {earningItems.length > 0 && (
           <div className="grid grid-cols-2 gap-4">
@@ -406,7 +382,6 @@ export function SalaryForm({
                 <Label htmlFor={`custom-${item.id}`}>{item.itemName}</Label>
                 <AmountInput
                   id={`custom-${item.id}`}
-                  placeholder={customPlaceholder(item.id)}
                   value={customValues[item.id]}
                   onChange={(value) => handleCustomValueChange(item.id, value)}
                 />
@@ -429,7 +404,6 @@ export function SalaryForm({
                 <Label htmlFor={`custom-${item.id}`}>{item.itemName}</Label>
                 <AmountInput
                   id={`custom-${item.id}`}
-                  placeholder={customPlaceholder(item.id)}
                   value={customValues[item.id]}
                   onChange={(value) => handleCustomValueChange(item.id, value)}
                 />
@@ -455,7 +429,6 @@ export function SalaryForm({
                 <Label htmlFor={`custom-${item.id}`}>{item.itemName}</Label>
                 <AmountInput
                   id={`custom-${item.id}`}
-                  placeholder={customPlaceholder(item.id)}
                   value={customValues[item.id]}
                   onChange={(value) => handleCustomValueChange(item.id, value)}
                 />
@@ -476,9 +449,6 @@ export function SalaryForm({
               <AmountInput id="standardMonthlyRemuneration" value={field.value} onChange={field.onChange} />
             )}
           />
-          <p className="text-xs text-muted-foreground">
-            定時決定・随時改定がない限り、前回登録時の値が引き継がれます。
-          </p>
         </div>
 
         <div className="grid grid-cols-2 gap-4">
@@ -490,7 +460,7 @@ export function SalaryForm({
               render={({ field }) => (
                 <AmountInput
                   id="healthInsurance"
-                  placeholder={String(insuranceDefaults.healthInsurance)}
+                  placeholder={insuranceDefaults.healthInsurance.toLocaleString()}
                   value={field.value}
                   onChange={field.onChange}
                 />
@@ -506,7 +476,7 @@ export function SalaryForm({
               render={({ field }) => (
                 <AmountInput
                   id="pension"
-                  placeholder={String(insuranceDefaults.pension)}
+                  placeholder={insuranceDefaults.pension.toLocaleString()}
                   value={field.value}
                   onChange={field.onChange}
                 />
@@ -522,7 +492,7 @@ export function SalaryForm({
               render={({ field }) => (
                 <AmountInput
                   id="employmentInsurance"
-                  placeholder={String(insuranceDefaults.employmentInsurance)}
+                  placeholder={insuranceDefaults.employmentInsurance.toLocaleString()}
                   value={field.value}
                   onChange={field.onChange}
                 />
@@ -541,7 +511,7 @@ export function SalaryForm({
               render={({ field }) => (
                 <AmountInput
                   id="incomeTax"
-                  placeholder={String(incomeTaxAuto)}
+                  placeholder={incomeTaxAuto.toLocaleString()}
                   value={field.value}
                   onChange={field.onChange}
                 />
@@ -558,7 +528,7 @@ export function SalaryForm({
                 <AmountInput
                   id="residentTax"
                   placeholder={
-                    residentTaxAutoAmount !== undefined ? String(residentTaxAutoAmount) : undefined
+                    residentTaxAutoAmount !== undefined ? residentTaxAutoAmount.toLocaleString() : undefined
                   }
                   value={field.value}
                   onChange={field.onChange}
@@ -578,7 +548,6 @@ export function SalaryForm({
                 <Label htmlFor={`custom-${item.id}`}>{item.itemName}</Label>
                 <AmountInput
                   id={`custom-${item.id}`}
-                  placeholder={customPlaceholder(item.id)}
                   value={customValues[item.id]}
                   onChange={(value) => handleCustomValueChange(item.id, value)}
                 />
@@ -594,25 +563,6 @@ export function SalaryForm({
 
       <div className="space-y-3 rounded-md border p-3">
         <p className="text-sm font-medium">控除</p>
-        <div className="space-y-1.5">
-          <Label htmlFor="otherDeduction">その他控除</Label>
-          <Controller
-            control={control}
-            name="otherDeduction"
-            render={({ field }) => (
-              <AmountInput
-                id="otherDeduction"
-                placeholder={
-                  parseDataNumber(previousSalaryData, "otherDeduction") !== undefined
-                    ? String(parseDataNumber(previousSalaryData, "otherDeduction"))
-                    : undefined
-                }
-                value={field.value}
-                onChange={field.onChange}
-              />
-            )}
-          />
-        </div>
 
         {deductionItems.length > 0 && (
           <div className="grid grid-cols-2 gap-4">
@@ -621,7 +571,6 @@ export function SalaryForm({
                 <Label htmlFor={`custom-${item.id}`}>{item.itemName}</Label>
                 <AmountInput
                   id={`custom-${item.id}`}
-                  placeholder={customPlaceholder(item.id)}
                   value={customValues[item.id]}
                   onChange={(value) => handleCustomValueChange(item.id, value)}
                 />

@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { format } from "date-fns";
-import { Pencil, Plus, Trash2 } from "lucide-react";
+import { Loader2, Pencil, Plus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import {
@@ -24,16 +24,22 @@ import type { BonusDTO } from "@/types";
 export function BonusesClient({ bonuses: initialBonuses }: { bonuses: BonusDTO[] }) {
   const router = useRouter();
   const [bonuses, setBonuses] = useState(initialBonuses);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
 
   async function handleDelete(id: string) {
-    const res = await fetch(`/api/bonuses/${id}`, { method: "DELETE" });
-    if (!res.ok) {
-      toast.error("削除に失敗しました");
-      return;
+    setDeletingId(id);
+    try {
+      const res = await fetch(`/api/bonuses/${id}`, { method: "DELETE" });
+      if (!res.ok) {
+        toast.error("削除に失敗しました");
+        return;
+      }
+      setBonuses((prev) => prev.filter((b) => b.id !== id));
+      toast.success("削除しました");
+      router.refresh();
+    } finally {
+      setDeletingId(null);
     }
-    setBonuses((prev) => prev.filter((b) => b.id !== id));
-    toast.success("削除しました");
-    router.refresh();
   }
 
   return (
@@ -53,7 +59,7 @@ export function BonusesClient({ bonuses: initialBonuses }: { bonuses: BonusDTO[]
             <CardContent className="flex items-center justify-between gap-2">
               <div>
                 <p className="font-medium">
-                  {bonus.bonusType} — {format(new Date(bonus.bonusDate), "yyyy年MM月dd日")}
+                  {format(new Date(bonus.bonusDate), "yyyy年MM月dd日")}
                 </p>
                 <p className="text-sm text-muted-foreground">
                   {Number(bonus.amount).toLocaleString()} 円
@@ -67,8 +73,12 @@ export function BonusesClient({ bonuses: initialBonuses }: { bonuses: BonusDTO[]
                 </Button>
                 <AlertDialog>
                   <AlertDialogTrigger asChild>
-                    <Button variant="ghost" size="icon">
-                      <Trash2 className="size-4" />
+                    <Button variant="ghost" size="icon" disabled={deletingId === bonus.id}>
+                      {deletingId === bonus.id ? (
+                        <Loader2 className="size-4 animate-spin" />
+                      ) : (
+                        <Trash2 className="size-4" />
+                      )}
                     </Button>
                   </AlertDialogTrigger>
                   <AlertDialogContent>
@@ -77,9 +87,21 @@ export function BonusesClient({ bonuses: initialBonuses }: { bonuses: BonusDTO[]
                       <AlertDialogDescription>この操作は取り消せません。</AlertDialogDescription>
                     </AlertDialogHeader>
                     <AlertDialogFooter>
-                      <AlertDialogCancel>キャンセル</AlertDialogCancel>
-                      <AlertDialogAction onClick={() => handleDelete(bonus.id)}>
-                        削除する
+                      <AlertDialogCancel disabled={deletingId === bonus.id}>
+                        キャンセル
+                      </AlertDialogCancel>
+                      <AlertDialogAction
+                        onClick={() => handleDelete(bonus.id)}
+                        disabled={deletingId === bonus.id}
+                      >
+                        {deletingId === bonus.id ? (
+                          <>
+                            <Loader2 className="size-4 animate-spin" />
+                            削除中...
+                          </>
+                        ) : (
+                          "削除する"
+                        )}
                       </AlertDialogAction>
                     </AlertDialogFooter>
                   </AlertDialogContent>

@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import localFont from "next/font/local";
 import { ThemeProvider } from "@/components/theme-provider";
 import { Toaster } from "@/components/ui/sonner";
@@ -20,6 +20,15 @@ const mplusRounded = localFont({
 export const metadata: Metadata = {
   title: "meisai-lab",
   description: "給与・賞与管理アプリ",
+  appleWebApp: {
+    capable: true,
+    title: "meisai-lab",
+    statusBarStyle: "default",
+  },
+};
+
+export const viewport: Viewport = {
+  themeColor: "#33724c",
 };
 
 export default function RootLayout({

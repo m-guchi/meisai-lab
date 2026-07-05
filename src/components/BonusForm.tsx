@@ -8,25 +8,21 @@ import { z } from "zod";
 import { format } from "date-fns";
 import { toast } from "sonner";
 
-import { calculateStandardBonusAmount, calculateStatutoryInsurance } from "@/lib/calculations";
+import {
+  calculateBonusWithholdingTax,
+  calculateStandardBonusAmount,
+  calculateStatutoryInsurance,
+} from "@/lib/calculations";
 import { resolveManualNumber } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { AmountInput } from "@/components/ui/amount-input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { AutoCalcHint } from "@/components/AutoCalcHint";
 import type { BonusDTO, ItemDTO, TaxSettingDTO } from "@/types";
 
 const bonusFormSchema = z.object({
-  bonusType: z.enum(["夏季", "冬季", "特別"]),
   bonusDate: z.string().min(1, "支給日は必須です"),
   baseAmount: z.number().positive("支給額は0より大きい数値が必須"),
   attendanceAdjustedAmount: z.number().min(0).optional(),
@@ -37,8 +33,6 @@ const bonusFormSchema = z.object({
   pension: z.number().min(0).optional(),
   employmentInsurance: z.number().min(0).optional(),
   incomeTax: z.number().min(0).optional(),
-  residentTax: z.number().min(0).optional(),
-  otherDeduction: z.number().min(0).optional(),
   memo: z.string().optional(),
 });
 
@@ -47,6 +41,11 @@ type BonusFormValues = z.infer<typeof bonusFormSchema>;
 function parseDataNumber(data: Record<string, unknown> | undefined, key: string) {
   const value = data?.[key];
   return typeof value === "number" ? value : undefined;
+}
+
+function parseAbsDataNumber(data: Record<string, unknown> | undefined, key: string) {
+  const value = parseDataNumber(data, key);
+  return value === undefined ? undefined : Math.abs(value);
 }
 
 function initialCustomValues(data: Record<string, unknown> | undefined): Record<string, number> {
@@ -67,10 +66,12 @@ export function BonusForm({
   bonus,
   taxSetting,
   items = [],
+  previousMonthTaxableSalary,
 }: {
   bonus?: BonusDTO;
   taxSetting?: TaxSettingDTO | null;
   items?: ItemDTO[];
+  previousMonthTaxableSalary?: number;
 }) {
   const router = useRouter();
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -97,19 +98,16 @@ export function BonusForm({
   } = useForm<BonusFormValues>({
     resolver: zodResolver(bonusFormSchema),
     defaultValues: {
-      bonusType: (bonus?.bonusType as BonusFormValues["bonusType"]) ?? "夏季",
       bonusDate: bonus ? toDateInputValue(bonus.bonusDate) : "",
       baseAmount: parseDataNumber(bonus?.data, "baseAmount") ?? 0,
       attendanceAdjustedAmount: parseDataNumber(bonus?.data, "attendanceAdjustedAmount"),
       futureDesignReserveAmount: parseDataNumber(bonus?.data, "futureDesignReserveAmount"),
-      dcPensionContribution: parseDataNumber(bonus?.data, "dcPensionContribution"),
+      dcPensionContribution: parseAbsDataNumber(bonus?.data, "dcPensionContribution"),
       standardBonusAmount: parseDataNumber(bonus?.data, "standardBonusAmount"),
-      healthInsurance: parseDataNumber(bonus?.data, "healthInsurance"),
-      pension: parseDataNumber(bonus?.data, "pension"),
-      employmentInsurance: parseDataNumber(bonus?.data, "employmentInsurance"),
-      incomeTax: parseDataNumber(bonus?.data, "incomeTax") ?? 0,
-      residentTax: parseDataNumber(bonus?.data, "residentTax") ?? 0,
-      otherDeduction: parseDataNumber(bonus?.data, "otherDeduction") ?? 0,
+      healthInsurance: parseAbsDataNumber(bonus?.data, "healthInsurance"),
+      pension: parseAbsDataNumber(bonus?.data, "pension"),
+      employmentInsurance: parseAbsDataNumber(bonus?.data, "employmentInsurance"),
+      incomeTax: parseAbsDataNumber(bonus?.data, "incomeTax"),
       memo: bonus?.memo ?? "",
     },
   });
@@ -122,9 +120,7 @@ export function BonusForm({
   const healthInsurance = watch("healthInsurance");
   const pension = watch("pension");
   const employmentInsurance = watch("employmentInsurance");
-  const incomeTax = watch("incomeTax") || 0;
-  const residentTax = watch("residentTax") || 0;
-  const otherDeduction = watch("otherDeduction") || 0;
+  const incomeTax = watch("incomeTax");
 
   function customTotal(categoryItems: ItemDTO[]) {
     return categoryItems.reduce((sum, item) => sum + (customValues[item.id] || 0), 0);
@@ -169,23 +165,43 @@ export function BonusForm({
     employmentInsurance,
     insuranceDefaults.employmentInsurance
   );
+
+  const nonTaxableEarningTotal = useMemo(
+    () =>
+      [...earningItems, ...otherEarningItems]
+        .filter((item) => !item.isTaxable)
+        .reduce((sum, item) => sum + (customValues[item.id] || 0), 0),
+    [earningItems, otherEarningItems, customValues]
+  );
+  const customOtherTaxableTotal = customTotal(otherTaxableItems);
+
+  const bonusTaxableBase =
+    grossAmount -
+    resolvedHealthInsurance -
+    resolvedPension -
+    resolvedEmploymentInsurance -
+    nonTaxableEarningTotal +
+    customOtherTaxableTotal;
+  const incomeTaxAuto =
+    previousMonthTaxableSalary !== undefined
+      ? calculateBonusWithholdingTax(previousMonthTaxableSalary, bonusTaxableBase)
+      : undefined;
+  const resolvedIncomeTax = resolveManualNumber(incomeTax, incomeTaxAuto ?? 0);
+
   const statutoryDeductionSectionTotal =
     resolvedHealthInsurance +
     resolvedPension +
     resolvedEmploymentInsurance +
-    incomeTax +
-    residentTax +
+    resolvedIncomeTax +
     customStatutoryDeductionTotal;
-  const deductionSectionTotal = otherDeduction + customDeductionTotal;
+  const deductionSectionTotal = customDeductionTotal;
 
   const netAmount =
     grossAmount -
     resolvedHealthInsurance -
     resolvedPension -
     resolvedEmploymentInsurance -
-    incomeTax -
-    residentTax -
-    otherDeduction -
+    resolvedIncomeTax -
     customStatutoryDeductionTotal -
     customDeductionTotal;
 
@@ -208,7 +224,6 @@ export function BonusForm({
       );
 
       const payload = {
-        bonusType: values.bonusType,
         bonusDate: new Date(values.bonusDate).toISOString(),
         amount: grossAmount,
         memo: values.memo || undefined,
@@ -221,9 +236,7 @@ export function BonusForm({
           healthInsurance: -resolvedHealthInsurance,
           pension: -resolvedPension,
           employmentInsurance: -resolvedEmploymentInsurance,
-          incomeTax: -incomeTax,
-          residentTax: -residentTax,
-          otherDeduction: -otherDeduction,
+          incomeTax: -resolvedIncomeTax,
           netAmount,
           customItemValues,
         },
@@ -250,31 +263,10 @@ export function BonusForm({
 
   return (
     <form onSubmit={handleSubmit(onSubmit)} className="max-w-xl space-y-6">
-      <div className="grid grid-cols-2 gap-4">
-        <div className="space-y-1.5">
-          <Label htmlFor="bonusType">種別</Label>
-          <Controller
-            control={control}
-            name="bonusType"
-            render={({ field }) => (
-              <Select value={field.value} onValueChange={field.onChange}>
-                <SelectTrigger id="bonusType" className="w-full">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="夏季">夏季</SelectItem>
-                  <SelectItem value="冬季">冬季</SelectItem>
-                  <SelectItem value="特別">特別</SelectItem>
-                </SelectContent>
-              </Select>
-            )}
-          />
-        </div>
-        <div className="space-y-1.5">
-          <Label htmlFor="bonusDate">支給日</Label>
-          <Input id="bonusDate" type="date" {...register("bonusDate")} />
-          {errors.bonusDate && <p className="text-sm text-destructive">{errors.bonusDate.message}</p>}
-        </div>
+      <div className="space-y-1.5">
+        <Label htmlFor="bonusDate">支給日</Label>
+        <Input id="bonusDate" type="date" {...register("bonusDate")} />
+        {errors.bonusDate && <p className="text-sm text-destructive">{errors.bonusDate.message}</p>}
       </div>
 
       <div className="space-y-3 rounded-md border p-3">
@@ -299,7 +291,7 @@ export function BonusForm({
             render={({ field }) => (
               <AmountInput
                 id="attendanceAdjustedAmount"
-                placeholder={String(baseAmount)}
+                placeholder={baseAmount.toLocaleString()}
                 value={field.value}
                 onChange={field.onChange}
               />
@@ -412,7 +404,7 @@ export function BonusForm({
             render={({ field }) => (
               <AmountInput
                 id="standardBonusAmount"
-                placeholder={String(standardBonusAmountDefault)}
+                placeholder={standardBonusAmountDefault.toLocaleString()}
                 value={field.value}
                 onChange={field.onChange}
               />
@@ -432,7 +424,7 @@ export function BonusForm({
               render={({ field }) => (
                 <AmountInput
                   id="healthInsurance"
-                  placeholder={String(insuranceDefaults.healthInsurance)}
+                  placeholder={insuranceDefaults.healthInsurance.toLocaleString()}
                   value={field.value}
                   onChange={field.onChange}
                 />
@@ -448,7 +440,7 @@ export function BonusForm({
               render={({ field }) => (
                 <AmountInput
                   id="pension"
-                  placeholder={String(insuranceDefaults.pension)}
+                  placeholder={insuranceDefaults.pension.toLocaleString()}
                   value={field.value}
                   onChange={field.onChange}
                 />
@@ -464,7 +456,7 @@ export function BonusForm({
               render={({ field }) => (
                 <AmountInput
                   id="employmentInsurance"
-                  placeholder={String(insuranceDefaults.employmentInsurance)}
+                  placeholder={insuranceDefaults.employmentInsurance.toLocaleString()}
                   value={field.value}
                   onChange={field.onChange}
                 />
@@ -481,19 +473,21 @@ export function BonusForm({
               control={control}
               name="incomeTax"
               render={({ field }) => (
-                <AmountInput id="incomeTax" value={field.value} onChange={field.onChange} />
+                <AmountInput
+                  id="incomeTax"
+                  placeholder={incomeTaxAuto !== undefined ? incomeTaxAuto.toLocaleString() : undefined}
+                  value={field.value}
+                  onChange={field.onChange}
+                />
               )}
             />
-          </div>
-          <div className="space-y-1.5">
-            <Label htmlFor="residentTax">住民税</Label>
-            <Controller
-              control={control}
-              name="residentTax"
-              render={({ field }) => (
-                <AmountInput id="residentTax" value={field.value} onChange={field.onChange} />
-              )}
-            />
+            {incomeTaxAuto !== undefined ? (
+              <AutoCalcHint manualValue={incomeTax} autoValue={incomeTaxAuto} />
+            ) : (
+              <p className="text-xs text-muted-foreground">
+                前月の給与が登録されていないため自動計算できません。
+              </p>
+            )}
           </div>
         </div>
 
@@ -519,16 +513,6 @@ export function BonusForm({
 
       <div className="space-y-3 rounded-md border p-3">
         <p className="text-sm font-medium">控除</p>
-        <div className="space-y-1.5">
-          <Label htmlFor="otherDeduction">その他控除</Label>
-          <Controller
-            control={control}
-            name="otherDeduction"
-            render={({ field }) => (
-              <AmountInput id="otherDeduction" value={field.value} onChange={field.onChange} />
-            )}
-          />
-        </div>
 
         {deductionItems.length > 0 && (
           <div className="grid grid-cols-2 gap-4">

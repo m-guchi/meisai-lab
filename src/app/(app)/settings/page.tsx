@@ -4,7 +4,9 @@ import { redirect } from "next/navigation";
 import { auth } from "@/auth";
 import { db } from "@/lib/db";
 import { buildEffectiveFrom, findApplicableTaxSetting } from "@/lib/taxSetting";
+import { APP_VERSION } from "@/lib/app-version";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { ChangelogDialog } from "@/components/ChangelogDialog";
 import { TaxSettingForm } from "./tax-setting-form";
 import { TaxSettingHistory } from "./TaxSettingHistory";
 import type { TaxSettingDTO } from "@/types";
@@ -53,6 +55,16 @@ export default async function SettingsPage({
             <p className="font-medium">{user.name}</p>
             <p className="text-sm text-muted-foreground">{user.email}</p>
           </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>アプリ情報</CardTitle>
+        </CardHeader>
+        <CardContent className="flex items-center justify-between gap-4">
+          <p className="text-sm text-muted-foreground">バージョン v{APP_VERSION}</p>
+          <ChangelogDialog />
         </CardContent>
       </Card>
 

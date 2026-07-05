@@ -2,7 +2,8 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { LayoutDashboard, Wallet, Gift, ListChecks, Receipt, Settings, LogOut } from "lucide-react";
+import { useFormStatus } from "react-dom";
+import { Wallet, Gift, ListChecks, Receipt, Settings, LogOut, Loader2 } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -10,7 +11,6 @@ import { ThemeToggle } from "@/components/ThemeToggle";
 import { signOutAction } from "@/app/actions/auth";
 
 const navItems = [
-  { href: "/dashboard", label: "ダッシュボード", icon: LayoutDashboard },
   { href: "/salaries", label: "給与", icon: Wallet },
   { href: "/bonuses", label: "賞与", icon: Gift },
   { href: "/items", label: "項目", icon: ListChecks },
@@ -24,7 +24,7 @@ export function Navigation() {
   return (
     <>
       <header className="sticky top-0 z-40 hidden border-b bg-background/80 backdrop-blur-md supports-backdrop-filter:bg-background/60 md:flex md:items-center md:justify-between md:px-6 md:py-3">
-        <Link href="/dashboard" className="flex items-center gap-2 font-semibold tracking-tight">
+        <Link href="/salaries" className="flex items-center gap-2 font-semibold tracking-tight">
           <span className="flex size-7 items-center justify-center rounded-md bg-primary text-sm font-bold text-primary-foreground">
             m
           </span>
@@ -51,15 +51,12 @@ export function Navigation() {
         <div className="flex items-center gap-1">
           <ThemeToggle />
           <form action={signOutAction}>
-            <Button type="submit" variant="ghost" size="sm">
-              <LogOut className="size-4" />
-              ログアウト
-            </Button>
+            <SignOutButton />
           </form>
         </div>
       </header>
 
-      <nav className="fixed inset-x-0 bottom-0 z-40 flex items-center border-t bg-background/95 py-1 backdrop-blur-md md:hidden">
+      <nav className="fixed inset-x-0 bottom-0 z-40 flex h-[74px] items-center border-t bg-background/95 py-1 backdrop-blur-md md:hidden">
         {navItems.map(({ href, label, icon: Icon }) => {
           const active = pathname.startsWith(href);
           return (
@@ -78,5 +75,16 @@ export function Navigation() {
         })}
       </nav>
     </>
+  );
+}
+
+function SignOutButton() {
+  const { pending } = useFormStatus();
+
+  return (
+    <Button type="submit" variant="ghost" size="sm" disabled={pending}>
+      {pending ? <Loader2 className="size-4 animate-spin" /> : <LogOut className="size-4" />}
+      ログアウト
+    </Button>
   );
 }

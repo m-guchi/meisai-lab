@@ -1,9 +1,11 @@
+import { headers } from "next/headers";
 import NextAuth from "next-auth";
 import Google from "next-auth/providers/google";
 import { PrismaAdapter } from "@auth/prisma-adapter";
 
 import { authConfig } from "@/auth.config";
 import { db } from "@/lib/db";
+import { notifySignalyLogin } from "@/lib/signaly";
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
   ...authConfig,
@@ -15,4 +17,13 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       clientSecret: process.env.GOOGLE_CLIENT_SECRET!,
     }),
   ],
+  events: {
+    async signIn({ user }) {
+      const headersList = await headers();
+      const ip =
+        headersList.get("x-forwarded-for")?.split(",")[0]?.trim() ??
+        headersList.get("x-real-ip");
+      await notifySignalyLogin({ email: user.email ?? null, ip });
+    },
+  },
 });

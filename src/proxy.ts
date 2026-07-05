@@ -25,7 +25,7 @@ export default auth((req) => {
 
   if (isPublicPath(pathname)) {
     if (req.auth?.user?.id && pathname === "/auth/signin") {
-      return NextResponse.redirect(new URL("/dashboard", req.url));
+      return NextResponse.redirect(new URL("/salaries", req.url));
     }
     return NextResponse.next();
   }
@@ -40,5 +40,7 @@ export default auth((req) => {
 });
 
 export const config = {
-  matcher: ["/((?!_next/static|_next/image|favicon.ico).*)"],
+  matcher: [
+    "/((?!_next/static|_next/image|favicon.ico|manifest.webmanifest|icons/|apple-icon).*)",
+  ],
 };

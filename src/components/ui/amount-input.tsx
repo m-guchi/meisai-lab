@@ -52,6 +52,7 @@ function AmountInput({ value, onChange, onFocus, onBlur, ...props }: AmountInput
       value={text}
       onFocus={(e) => {
         isFocused.current = true
+        e.target.select()
         onFocus?.(e)
       }}
       onChange={(e) => {

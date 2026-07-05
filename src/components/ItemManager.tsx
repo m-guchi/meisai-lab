@@ -4,7 +4,7 @@ import { useState } from "react";
 import { useForm, Controller } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { toast } from "sonner";
-import { GripVertical, Pencil, Plus } from "lucide-react";
+import { GripVertical, Loader2, Pencil, Plus } from "lucide-react";
 import {
   DndContext,
   closestCenter,
@@ -79,6 +79,8 @@ export function ItemManager({ items: initialItems }: { items: ItemDTO[] }) {
   const [items, setItems] = useState(initialItems);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingItem, setEditingItem] = useState<ItemDTO | null>(null);
+  const [togglingId, setTogglingId] = useState<string | null>(null);
+  const [isReordering, setIsReordering] = useState(false);
 
   const sensors = useSensors(useSensor(PointerSensor));
 
@@ -88,7 +90,7 @@ export function ItemManager({ items: initialItems }: { items: ItemDTO[] }) {
     handleSubmit,
     reset,
     watch,
-    formState: { errors },
+    formState: { errors, isSubmitting },
   } = useForm<ItemFormValues>({
     resolver: zodResolver(
       CreateItemSchema.pick({ itemName: true, itemType: true, scope: true, isTaxable: true })
@@ -118,16 +120,21 @@ export function ItemManager({ items: initialItems }: { items: ItemDTO[] }) {
 
   async function persistOrder(reordered: ItemDTO[]) {
     setItems(reordered);
-    await Promise.all(
-      reordered.map((item, index) =>
-        fetch(`/api/items/${item.id}`, {
-          method: "PUT",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ displayOrder: index }),
-        })
-      )
-    );
-    router.refresh();
+    setIsReordering(true);
+    try {
+      await Promise.all(
+        reordered.map((item, index) =>
+          fetch(`/api/items/${item.id}`, {
+            method: "PUT",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ displayOrder: index }),
+          })
+        )
+      );
+      router.refresh();
+    } finally {
+      setIsReordering(false);
+    }
   }
 
   async function handleDragEndForCategory(category: ItemType, event: DragEndEvent) {
@@ -147,13 +154,18 @@ export function ItemManager({ items: initialItems }: { items: ItemDTO[] }) {
   }
 
   async function handleToggleActive(item: ItemDTO) {
+    setTogglingId(item.id);
     setItems((prev) => prev.map((i) => (i.id === item.id ? { ...i, isActive: !i.isActive } : i)));
-    await fetch(`/api/items/${item.id}`, {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ isActive: !item.isActive }),
-    });
-    router.refresh();
+    try {
+      await fetch(`/api/items/${item.id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ isActive: !item.isActive }),
+      });
+      router.refresh();
+    } finally {
+      setTogglingId(null);
+    }
   }
 
   async function onSubmit(values: ItemFormValues) {
@@ -292,7 +304,8 @@ export function ItemManager({ items: initialItems }: { items: ItemDTO[] }) {
                   />
                 </div>
               )}
-              <Button type="submit" className="w-full">
+              <Button type="submit" className="w-full" disabled={isSubmitting}>
+                {isSubmitting && <Loader2 className="size-4 animate-spin" />}
                 {editingItem ? "更新する" : "追加する"}
               </Button>
             </form>
@@ -307,8 +320,9 @@ export function ItemManager({ items: initialItems }: { items: ItemDTO[] }) {
 
           return (
             <div key={category} className="space-y-2">
-              <h2 className="text-sm font-semibold text-muted-foreground">
+              <h2 className="flex items-center gap-1.5 text-sm font-semibold text-muted-foreground">
                 {ITEM_TYPE_LABEL[category]}
+                {isReordering && <Loader2 className="size-3.5 animate-spin" />}
               </h2>
               <DndContext
                 sensors={sensors}
@@ -326,6 +340,7 @@ export function ItemManager({ items: initialItems }: { items: ItemDTO[] }) {
                         item={item}
                         onToggleActive={handleToggleActive}
                         onEdit={openEditDialog}
+                        isToggling={togglingId === item.id}
                       />
                     ))}
                   </div>
@@ -343,10 +358,12 @@ function SortableItemRow({
   item,
   onToggleActive,
   onEdit,
+  isToggling,
 }: {
   item: ItemDTO;
   onToggleActive: (item: ItemDTO) => void;
   onEdit: (item: ItemDTO) => void;
+  isToggling: boolean;
 }) {
   const { attributes, listeners, setNodeRef, transform, transition } = useSortable({ id: item.id });
 
@@ -378,7 +395,11 @@ function SortableItemRow({
         >
           <Pencil className="size-4" />
         </button>
-        <Switch checked={item.isActive} onCheckedChange={() => onToggleActive(item)} />
+        {isToggling ? (
+          <Loader2 className="size-4 animate-spin text-muted-foreground" />
+        ) : (
+          <Switch checked={item.isActive} onCheckedChange={() => onToggleActive(item)} />
+        )}
       </CardContent>
       </Card>
     </div>

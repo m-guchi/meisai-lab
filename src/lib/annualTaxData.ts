@@ -1,20 +1,47 @@
 // サーバー専用（`db` に依存する唯一の lib ファイル）。クライアントコンポーネントから import しないこと。
 import { db } from "@/lib/db";
+import type { ResidentTaxBreakdownField, ResidentTaxOverrides } from "@/lib/annualTax";
+
+function sumAbsField(data: unknown, field: string): number {
+  const d = (data ?? {}) as Record<string, unknown>;
+  const value = d[field];
+  return typeof value === "number" ? Math.abs(value) : 0;
+}
+
+function numberField(data: unknown, field: string): number {
+  const d = (data ?? {}) as Record<string, unknown>;
+  const value = d[field];
+  return typeof value === "number" ? value : 0;
+}
 
 function insuranceFromData(data: unknown): number {
-  const d = (data ?? {}) as Record<string, unknown>;
-  const abs = (v: unknown) => (typeof v === "number" ? Math.abs(v) : 0);
-  return abs(d.healthInsurance) + abs(d.pension) + abs(d.employmentInsurance);
+  return (
+    sumAbsField(data, "healthInsurance") +
+    sumAbsField(data, "pension") +
+    sumAbsField(data, "employmentInsurance")
+  );
 }
+
+function customItemValue(data: unknown, itemId: string): number {
+  const d = (data ?? {}) as Record<string, unknown>;
+  const raw = d.customItemValues;
+  if (!raw || typeof raw !== "object") return 0;
+  const value = (raw as Record<string, unknown>)[itemId];
+  return typeof value === "number" ? value : 0;
+}
+
+// 年末調整・賞与の所得税(差額)を項目として手入力している場合、源泉徴収税額の集計から差し引く
+// （どちらも「控除」区分の項目のため保存時に符号が反転しており、差し引くことで実際の源泉徴収額に一致する）
+const INCOME_TAX_ADJUSTMENT_ITEM_NAMES = ["年末調整", "所得税(差額)"];
 
 export async function getAnnualAggregate(
   userId: string,
   year: number
-): Promise<{ grossIncome: number; socialInsuranceTotal: number }> {
+): Promise<{ grossIncome: number; socialInsuranceTotal: number; incomeTaxWithheldTotal: number }> {
   const gte = new Date(`${year}-01-01`);
   const lt = new Date(`${year + 1}-01-01`);
 
-  const [salaries, bonuses] = await Promise.all([
+  const [salaries, bonuses, adjustmentItems] = await Promise.all([
     db.salary.findMany({
       where: { userId, deletedAt: null, salaryDate: { gte, lt } },
       select: { grossSalary: true, data: true },
@@ -22,6 +49,10 @@ export async function getAnnualAggregate(
     db.bonus.findMany({
       where: { userId, deletedAt: null, bonusDate: { gte, lt } },
       select: { amount: true, data: true },
+    }),
+    db.item.findMany({
+      where: { userId, itemName: { in: INCOME_TAX_ADJUSTMENT_ITEM_NAMES } },
+      select: { id: true },
     }),
   ]);
 
@@ -32,25 +63,101 @@ export async function getAnnualAggregate(
     salaries.reduce((sum, r) => sum + insuranceFromData(r.data), 0) +
     bonuses.reduce((sum, r) => sum + insuranceFromData(r.data), 0);
 
-  return { grossIncome, socialInsuranceTotal };
+  const incomeTaxAdjustmentTotal = [...salaries, ...bonuses].reduce(
+    (sum, r) =>
+      sum + adjustmentItems.reduce((itemSum, item) => itemSum + customItemValue(r.data, item.id), 0),
+    0
+  );
+  const incomeTaxWithheldTotal =
+    salaries.reduce((sum, r) => sum + sumAbsField(r.data, "incomeTax"), 0) +
+    bonuses.reduce((sum, r) => sum + sumAbsField(r.data, "incomeTax"), 0) -
+    incomeTaxAdjustmentTotal;
+
+  return { grossIncome, socialInsuranceTotal, incomeTaxWithheldTotal };
+}
+
+// ふるさと納税上限額の見込み計算用に、その年の残り月分の給与・賞与を推定する。
+// - 給与: 直近の給与明細と同じ基本給(baseGrossSalary)の月だけを対象に平均し、未登録の残り月数分を加算する
+//   （昇給があった場合、昇給前の月を平均に混ぜないようにするため）
+// - 賞与: 前年に支給があった月のうち、その年にまだ登録がない月については前年同月の支給額を見込みとして加算する
+export async function getFurusatoNozeiIncomeProjection(
+  userId: string,
+  year: number
+): Promise<{ estimatedGrossIncome: number; estimatedSocialInsuranceTotal: number }> {
+  const gte = new Date(`${year}-01-01`);
+  const lt = new Date(`${year + 1}-01-01`);
+  const prevGte = new Date(`${year - 1}-01-01`);
+  const prevLt = new Date(`${year}-01-01`);
+
+  const [salaries, bonuses, prevBonuses] = await Promise.all([
+    db.salary.findMany({
+      where: { userId, deletedAt: null, salaryDate: { gte, lt } },
+      select: { salaryDate: true, grossSalary: true, data: true },
+      orderBy: { salaryDate: "asc" },
+    }),
+    db.bonus.findMany({
+      where: { userId, deletedAt: null, bonusDate: { gte, lt } },
+      select: { bonusDate: true, amount: true, data: true },
+    }),
+    db.bonus.findMany({
+      where: { userId, deletedAt: null, bonusDate: { gte: prevGte, lt: prevLt } },
+      select: { bonusDate: true, amount: true, data: true },
+    }),
+  ]);
+
+  let estimatedSalaryGross = salaries.reduce((sum, s) => sum + Number(s.grossSalary), 0);
+  let estimatedSalaryInsurance = salaries.reduce((sum, s) => sum + insuranceFromData(s.data), 0);
+
+  const remainingMonths = Math.max(12 - salaries.length, 0);
+  if (remainingMonths > 0 && salaries.length > 0) {
+    const currentBaseSalary = numberField(salaries[salaries.length - 1].data, "baseGrossSalary");
+    const currentRegime = salaries.filter(
+      (s) => numberField(s.data, "baseGrossSalary") === currentBaseSalary
+    );
+    const avgGross =
+      currentRegime.reduce((sum, s) => sum + Number(s.grossSalary), 0) / currentRegime.length;
+    const avgInsurance =
+      currentRegime.reduce((sum, s) => sum + insuranceFromData(s.data), 0) / currentRegime.length;
+
+    estimatedSalaryGross += avgGross * remainingMonths;
+    estimatedSalaryInsurance += avgInsurance * remainingMonths;
+  }
+
+  const enteredBonusMonths = new Set(bonuses.map((b) => b.bonusDate.getMonth() + 1));
+  let estimatedBonusGross = bonuses.reduce((sum, b) => sum + Number(b.amount), 0);
+  let estimatedBonusInsurance = bonuses.reduce((sum, b) => sum + insuranceFromData(b.data), 0);
+
+  for (const prevBonus of prevBonuses) {
+    if (enteredBonusMonths.has(prevBonus.bonusDate.getMonth() + 1)) continue;
+    estimatedBonusGross += Number(prevBonus.amount);
+    estimatedBonusInsurance += insuranceFromData(prevBonus.data);
+  }
+
+  return {
+    estimatedGrossIncome: estimatedSalaryGross + estimatedBonusGross,
+    estimatedSocialInsuranceTotal: estimatedSalaryInsurance + estimatedBonusInsurance,
+  };
 }
 
 export type AnnualTaxEntry = {
   grossIncome: number;
   socialInsuranceTotal: number;
+  incomeTaxWithheldTotal: number;
   lifeInsuranceGeneral: number;
   lifeInsuranceCareMedical: number;
   lifeInsurancePension: number;
   furusatoNozei: number;
+  overrides: ResidentTaxOverrides;
 };
 
 export async function buildAnnualTaxData(
   userId: string,
   candidateYears: number[]
 ): Promise<Record<number, AnnualTaxEntry>> {
-  const [aggregates, deductions] = await Promise.all([
+  const [aggregates, deductions, overridesList] = await Promise.all([
     Promise.all(candidateYears.map((year) => getAnnualAggregate(userId, year))),
     db.deduction.findMany({ where: { userId, year: { in: candidateYears } } }),
+    db.taxCalculationOverride.findMany({ where: { userId, year: { in: candidateYears } } }),
   ]);
 
   const deductionsByYear = new Map<number, Record<string, number>>();
@@ -58,6 +165,13 @@ export async function buildAnnualTaxData(
     const entry = deductionsByYear.get(d.year) ?? {};
     entry[d.deductionType] = Number(d.amount);
     deductionsByYear.set(d.year, entry);
+  }
+
+  const overridesByYear = new Map<number, ResidentTaxOverrides>();
+  for (const o of overridesList) {
+    const entry = overridesByYear.get(o.year) ?? {};
+    entry[o.field as ResidentTaxBreakdownField] = Number(o.amount);
+    overridesByYear.set(o.year, entry);
   }
 
   return Object.fromEntries(
@@ -68,12 +182,31 @@ export async function buildAnnualTaxData(
         {
           grossIncome: aggregates[i].grossIncome,
           socialInsuranceTotal: aggregates[i].socialInsuranceTotal,
+          incomeTaxWithheldTotal: aggregates[i].incomeTaxWithheldTotal,
           lifeInsuranceGeneral: perType?.lifeInsuranceGeneral ?? 0,
           lifeInsuranceCareMedical: perType?.lifeInsuranceCareMedical ?? 0,
           lifeInsurancePension: perType?.lifeInsurancePension ?? 0,
           furusatoNozei: perType?.furusatoNozei ?? 0,
+          overrides: overridesByYear.get(year) ?? {},
         },
       ];
     })
   );
+}
+
+export async function getYearsWithTaxReturnData(userId: string): Promise<number[]> {
+  const [salaries, bonuses, deductions, overrides] = await Promise.all([
+    db.salary.findMany({ where: { userId, deletedAt: null }, select: { salaryDate: true } }),
+    db.bonus.findMany({ where: { userId, deletedAt: null }, select: { bonusDate: true } }),
+    db.deduction.findMany({ where: { userId }, select: { year: true } }),
+    db.taxCalculationOverride.findMany({ where: { userId }, select: { year: true } }),
+  ]);
+
+  const years = new Set<number>();
+  for (const s of salaries) years.add(s.salaryDate.getFullYear());
+  for (const b of bonuses) years.add(b.bonusDate.getFullYear());
+  for (const d of deductions) years.add(d.year);
+  for (const o of overrides) years.add(o.year);
+
+  return Array.from(years).sort((a, b) => b - a);
 }

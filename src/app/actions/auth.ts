@@ -7,5 +7,5 @@ export async function signOutAction() {
 }
 
 export async function signInWithGoogleAction(callbackUrl?: string) {
-  await signIn("google", { redirectTo: callbackUrl ?? "/dashboard" });
+  await signIn("google", { redirectTo: callbackUrl ?? "/salaries" });
 }

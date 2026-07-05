@@ -1,7 +1,7 @@
 import { Wallet } from "lucide-react";
-import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { signInWithGoogleAction } from "@/app/actions/auth";
+import { SignInButton } from "./sign-in-button";
 
 export default async function SignInPage({
   searchParams,
@@ -22,9 +22,7 @@ export default async function SignInPage({
         </CardHeader>
         <CardContent>
           <form action={signInWithGoogleAction.bind(null, callbackUrl)}>
-            <Button type="submit" size="lg" className="w-full rounded-full">
-              Googleでログイン
-            </Button>
+            <SignInButton />
           </form>
         </CardContent>
       </Card>

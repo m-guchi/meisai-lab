@@ -1,20 +1,13 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
+import { useState } from "react";
 import { format } from "date-fns";
-import { Pencil, Trash2 } from "lucide-react";
+import { Loader2, Pencil, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import {
   Table,
   TableBody,
@@ -39,44 +32,26 @@ import type { SalaryDTO } from "@/types";
 
 export function SalaryList({ salaries }: { salaries: SalaryDTO[] }) {
   const router = useRouter();
-  const [monthFilter, setMonthFilter] = useState<string>("all");
-
-  const months = useMemo(() => {
-    const set = new Set(salaries.map((s) => format(new Date(s.salaryDate), "yyyy-MM")));
-    return Array.from(set).sort().reverse();
-  }, [salaries]);
-
-  const filtered = useMemo(() => {
-    if (monthFilter === "all") return salaries;
-    return salaries.filter((s) => format(new Date(s.salaryDate), "yyyy-MM") === monthFilter);
-  }, [salaries, monthFilter]);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
 
   async function handleDelete(id: string) {
-    const res = await fetch(`/api/salaries/${id}`, { method: "DELETE" });
-    if (!res.ok) {
-      toast.error("削除に失敗しました");
-      return;
+    setDeletingId(id);
+    try {
+      const res = await fetch(`/api/salaries/${id}`, { method: "DELETE" });
+      if (!res.ok) {
+        toast.error("削除に失敗しました");
+        return;
+      }
+      toast.success("削除しました");
+      router.refresh();
+    } finally {
+      setDeletingId(null);
     }
-    toast.success("削除しました");
-    router.refresh();
   }
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between gap-2">
-        <Select value={monthFilter} onValueChange={setMonthFilter}>
-          <SelectTrigger className="w-40">
-            <SelectValue placeholder="月で絞り込み" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">すべて</SelectItem>
-            {months.map((m) => (
-              <SelectItem key={m} value={m}>
-                {m}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+      <div className="flex items-center justify-end gap-2">
         <Button asChild>
           <Link href="/salaries/new">新規登録</Link>
         </Button>
@@ -93,7 +68,7 @@ export function SalaryList({ salaries }: { salaries: SalaryDTO[] }) {
             </TableRow>
           </TableHeader>
           <TableBody>
-            {filtered.map((salary) => (
+            {salaries.map((salary) => (
               <TableRow key={salary.id}>
                 <TableCell>{format(new Date(salary.salaryDate), "yyyy年MM月dd日")}</TableCell>
                 <TableCell className="text-right">
@@ -109,7 +84,10 @@ export function SalaryList({ salaries }: { salaries: SalaryDTO[] }) {
                         <Pencil className="size-4" />
                       </Link>
                     </Button>
-                    <DeleteButton onConfirm={() => handleDelete(salary.id)} />
+                    <DeleteButton
+                      onConfirm={() => handleDelete(salary.id)}
+                      isDeleting={deletingId === salary.id}
+                    />
                   </div>
                 </TableCell>
               </TableRow>
@@ -119,7 +97,7 @@ export function SalaryList({ salaries }: { salaries: SalaryDTO[] }) {
       </div>
 
       <div className="space-y-2 md:hidden">
-        {filtered.map((salary) => (
+        {salaries.map((salary) => (
           <Card key={salary.id}>
             <CardContent className="flex items-center justify-between gap-2">
               <div>
@@ -136,7 +114,10 @@ export function SalaryList({ salaries }: { salaries: SalaryDTO[] }) {
                     <Pencil className="size-4" />
                   </Link>
                 </Button>
-                <DeleteButton onConfirm={() => handleDelete(salary.id)} />
+                <DeleteButton
+                  onConfirm={() => handleDelete(salary.id)}
+                  isDeleting={deletingId === salary.id}
+                />
               </div>
             </CardContent>
           </Card>
@@ -146,12 +127,18 @@ export function SalaryList({ salaries }: { salaries: SalaryDTO[] }) {
   );
 }
 
-function DeleteButton({ onConfirm }: { onConfirm: () => void }) {
+function DeleteButton({
+  onConfirm,
+  isDeleting,
+}: {
+  onConfirm: () => void;
+  isDeleting: boolean;
+}) {
   return (
     <AlertDialog>
       <AlertDialogTrigger asChild>
-        <Button variant="ghost" size="icon">
-          <Trash2 className="size-4" />
+        <Button variant="ghost" size="icon" disabled={isDeleting}>
+          {isDeleting ? <Loader2 className="size-4 animate-spin" /> : <Trash2 className="size-4" />}
         </Button>
       </AlertDialogTrigger>
       <AlertDialogContent>
@@ -160,8 +147,17 @@ function DeleteButton({ onConfirm }: { onConfirm: () => void }) {
           <AlertDialogDescription>この操作は取り消せません。</AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter>
-          <AlertDialogCancel>キャンセル</AlertDialogCancel>
-          <AlertDialogAction onClick={onConfirm}>削除する</AlertDialogAction>
+          <AlertDialogCancel disabled={isDeleting}>キャンセル</AlertDialogCancel>
+          <AlertDialogAction onClick={onConfirm} disabled={isDeleting}>
+            {isDeleting ? (
+              <>
+                <Loader2 className="size-4 animate-spin" />
+                削除中...
+              </>
+            ) : (
+              "削除する"
+            )}
+          </AlertDialogAction>
         </AlertDialogFooter>
       </AlertDialogContent>
     </AlertDialog>

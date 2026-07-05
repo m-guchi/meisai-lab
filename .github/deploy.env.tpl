@@ -18,3 +18,4 @@ GOOGLE_CLIENT_ID=op://apps/meisai-lab/google-client-id
 GOOGLE_CLIENT_SECRET=op://apps/meisai-lab/google-client-secret
 
 SIGNALY_WEBHOOK_URL=op://apps/meisai-lab/ci-webhook-url
+SIGNALY_LOGIN_WEBHOOK_URL=op://apps/meisai-lab/login-webhook-url

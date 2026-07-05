@@ -17,7 +17,6 @@ export type SalaryDTO = {
 export type BonusDTO = {
   id: string;
   userId: string;
-  bonusType: string;
   bonusDate: string;
   amount: string;
   data: Record<string, unknown>;

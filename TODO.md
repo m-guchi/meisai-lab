@@ -1,6 +1,7 @@
 # meisai-lab 残タスク・未確定事項まとめ
 
 作成日: 2026-07-05
+最終更新: 2026-07-05
 
 ---
 
@@ -10,11 +11,10 @@
   M PLUS Rounded 1c をセルフホスト中（`src/app/fonts/*.ttf`）。4ウェイト合計約13MBあり初回読み込みが重い。
   対応案: ①文字サブセット化 ②WOFF2変換 ③ウェイト数を減らす（例: 400/700のみ）④このまま進める
 - [x] ~~Item（カスタム項目）と給与登録フォームの連携~~ → 完了（オプションA: 既存の固定フィールドは維持しつつ、`/items` で登録したアクティブな項目を給与登録フォームに追加表示する形で実装）
-- [ ] **Deduction モデルが未使用**
-  Prisma スキーマに `Deduction`（生命保険料控除・ふるさと納税など、年単位の控除）が定義されているが、API・UIとも一切実装していない（CODING_CONTEXT.md のAPI一覧にもそもそも含まれていなかった）。年末調整・確定申告用の控除を別管理したいか、`Salary.data` の「その他控除」で十分か、方針を決める必要がある。
+- [x] ~~Deduction モデルが未使用~~ → 完了（`/api/deductions` とタックスリターン画面（`/tax-return`）から年次控除として利用）
 - [x] ~~賞与の編集機能がない~~ → 完了（`/bonuses` に編集ダイアログを追加）
 - [ ] **ローディング状態・エラーバウンダリ未実装**
-  CODING_CONTEXT.md のPhase1チェックリストにある「ローディング状態」「エラーハンドリング」について、`loading.tsx` / `error.tsx` などのUI側の作り込みはまだ（APIの401/400やtoast通知のみ）。
+  `loading.tsx` / `error.tsx` などのUI側の作り込みはまだ（APIの401/400やtoast通知のみ）。
 
 ## 2. 新機能の検討（元の計画には無かったもの）
 
@@ -25,17 +25,20 @@
 
 ## 3. Git操作（指示待ち）
 
-- [ ] 現在 `develop` ブランチだが、アプリ全体が**未コミット**。`git commit` の実行指示待ち
-- [ ] リモートへの push、`main` へのPR作成・マージも同様に指示待ち
+- [x] ~~develop ブランチが未コミット~~ → develop に16件のコミットあり
+- [ ] リモート（`origin`）は `main` のみで、直近2コミットで止まっている（`develop` は未push）。`develop` の push、`main` へのPR作成・マージは指示待ち
 
 ## 4. 外部サービスの手動設定（私は実行不可）
 
-- [ ] **1Password**: `apps/meisai-lab` アイテム作成（本番用 `auth-secret` / `google-client-id` / `google-client-secret` / `auth-url` / `target-dir` / `port` / `db-name` / `ci-webhook-url`）
-- [ ] **GitHub**: `OP_SERVICE_ACCOUNT_TOKEN` シークレット登録、`develop` をデフォルトブランチ化、`main` の Branch protection 設定
-- [ ] **VPS**: `/apps/meisai-lab` ディレクトリ作成、PM2登録、Apache vhost設置、certbot、DNSレコード（`meisai-lab.gucchii.com`）登録
-- [ ] **Google Cloud（本番用）**: 開発用とは別にプロジェクト/OAuthクライアントを作成し、リダイレクトURI `https://meisai-lab.gucchii.com/api/auth/callback/google` を登録 → 発行値を1Passwordへ保存
-- [ ] **Signaly**: アプリ用通知チャンネル作成、webhook URLを1Passwordの `ci-webhook-url` に登録
-- [ ] **m-guchi/docs**: ポート一覧表に `3106` を追記登録
+- [ ] **1Password**: `apps/meisai-lab` アイテムに本番用 `auth-secret` / `google-client-id` / `google-client-secret` / `auth-url` / `target-dir` / `port` / `db-name` / `ci-webhook-url` を登録
+- [x] ~~1Password: `login-webhook-url` 登録~~ → 完了
+- [x] ~~GitHub: `OP_SERVICE_ACCOUNT_TOKEN` シークレット登録~~ → 完了
+- [ ] **GitHub**: `develop` をデフォルトブランチ化、`main` の Branch protection 設定
+- [ ] **VPS**: `/apps/meisai-lab` ディレクトリ作成、PM2登録、Apache vhost設置、certbot（DNSレコード `meisai.gucchii.com` は登録済み。`https://meisai.gucchii.com/` は 503 — バックエンド未起動と推測。GitHub Actions のワークフロー実行履歴もまだ無く、deploy が一度も走っていない）
+- [ ] **Google Cloud（本番用）**: 開発用とは別にプロジェクト/OAuthクライアントを作成し、リダイレクトURI `https://meisai.gucchii.com/api/auth/callback/google` を登録 → 発行値を1Passwordへ保存
+- [ ] **Signaly**: アプリ用のCI通知チャンネル作成、webhook URLを1Passwordの `ci-webhook-url` に登録
+- [x] ~~Signaly: ログイン通知チャンネル作成、webhook URLを1Passwordの `login-webhook-url` に登録~~ → 完了（`src/lib/signaly.ts` / `events.signIn` から通知）
+- [ ] **m-guchi/docs**: ポート一覧表（`apps/_docs/README.md` プロジェクト別ポート一覧）に `meisai-lab: 3106` を追記登録
 
 ## 5. 未実施の動作確認（任意）
 

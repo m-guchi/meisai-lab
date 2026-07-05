@@ -11,7 +11,6 @@ export type CreateSalary = z.infer<typeof CreateSalarySchema>;
 export const UpdateSalarySchema = CreateSalarySchema.partial();
 
 export const CreateBonusSchema = z.object({
-  bonusType: z.enum(["夏季", "冬季", "特別"]),
   bonusDate: z.string().datetime("無効な日付形式"),
   amount: z.number().positive("支給額は0より大きい数値が必須"),
   data: z.record(z.string(), z.unknown()).optional(),
@@ -66,3 +65,16 @@ export const CreateDeductionSchema = z.object({
 });
 export type CreateDeduction = z.infer<typeof CreateDeductionSchema>;
 export const UpdateDeductionSchema = CreateDeductionSchema.partial();
+
+export const CreateTaxCalculationOverrideSchema = z.object({
+  field: z.string().min(1).max(50),
+  amount: z.number(),
+  year: z.number().int().min(2000).max(2100),
+});
+export type CreateTaxCalculationOverride = z.infer<typeof CreateTaxCalculationOverrideSchema>;
+
+export const LockTaxCalculationSchema = z.object({
+  year: z.number().int().min(2000).max(2100),
+  values: z.record(z.string(), z.number()),
+});
+export type LockTaxCalculation = z.infer<typeof LockTaxCalculationSchema>;

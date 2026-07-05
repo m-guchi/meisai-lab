@@ -54,13 +54,14 @@ model User {
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
 
-  accounts    Account[]
-  sessions    Session[]
-  salaries    Salary[]
-  bonuses     Bonus[]
-  items       Item[]
-  taxSettings TaxSetting[]
-  deductions  Deduction[]
+  accounts                Account[]
+  sessions                Session[]
+  salaries                Salary[]
+  bonuses                 Bonus[]
+  items                   Item[]
+  taxSettings             TaxSetting[]
+  deductions              Deduction[]
+  taxCalculationOverrides TaxCalculationOverride[]
 }
 
 // --- Application models ---
@@ -90,7 +91,6 @@ model Bonus {
   userId String
   user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  bonusType String // "夏季" / "冬季" / "特別"
   bonusDate DateTime
   amount    Decimal  @db.Decimal(10, 2)
   data      Json
@@ -100,7 +100,7 @@ model Bonus {
   updatedAt DateTime  @updatedAt
   deletedAt DateTime?
 
-  @@unique([userId, bonusDate, bonusType])
+  @@unique([userId, bonusDate])
   @@index([userId, bonusDate])
 }
 
@@ -128,10 +128,10 @@ model TaxSetting {
   user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   effectiveFrom           DateTime // 適用開始年月（当該月の1日を保持）
-  healthInsuranceRate     Decimal @default(9.15) @db.Decimal(5, 2)
-  pensionRate             Decimal @default(9.15) @db.Decimal(5, 2)
-  employmentInsuranceRate Decimal @default(0.60) @db.Decimal(5, 2)
-  incomeRateTaxFormula    String? @db.Text // Phase 2以降
+  healthInsuranceRate     Decimal  @default(9.15) @db.Decimal(5, 2)
+  pensionRate             Decimal  @default(9.15) @db.Decimal(5, 2)
+  employmentInsuranceRate Decimal  @default(0.60) @db.Decimal(5, 2)
+  incomeRateTaxFormula    String?  @db.Text // Phase 2以降
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -152,5 +152,22 @@ model Deduction {
   createdAt DateTime @default(now())
 
   @@unique([userId, year, deductionType])
+  @@index([userId, year])
+}
+
+// 住民税計算過程（annualTax.ts の各ステップ）の手入力による上書き値
+model TaxCalculationOverride {
+  id     String @id @default(cuid())
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  year   Int
+  field  String // "annualGrossIncome" / "employmentIncome" など、計算過程の項目キー
+  amount Decimal @db.Decimal(10, 2)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([userId, year, field])
   @@index([userId, year])
 }
