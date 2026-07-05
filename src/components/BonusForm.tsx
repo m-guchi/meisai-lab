@@ -29,6 +29,9 @@ const bonusFormSchema = z.object({
   bonusType: z.enum(["夏季", "冬季", "特別"]),
   bonusDate: z.string().min(1, "支給日は必須です"),
   baseAmount: z.number().positive("支給額は0より大きい数値が必須"),
+  attendanceAdjustedAmount: z.number().min(0).optional(),
+  futureDesignReserveAmount: z.number().min(0).optional(),
+  dcPensionContribution: z.number().min(0).optional(),
   standardBonusAmount: z.number().min(0).optional(),
   healthInsurance: z.number().min(0).optional(),
   pension: z.number().min(0).optional(),
@@ -97,6 +100,9 @@ export function BonusForm({
       bonusType: (bonus?.bonusType as BonusFormValues["bonusType"]) ?? "夏季",
       bonusDate: bonus ? toDateInputValue(bonus.bonusDate) : "",
       baseAmount: parseDataNumber(bonus?.data, "baseAmount") ?? 0,
+      attendanceAdjustedAmount: parseDataNumber(bonus?.data, "attendanceAdjustedAmount"),
+      futureDesignReserveAmount: parseDataNumber(bonus?.data, "futureDesignReserveAmount"),
+      dcPensionContribution: parseDataNumber(bonus?.data, "dcPensionContribution"),
       standardBonusAmount: parseDataNumber(bonus?.data, "standardBonusAmount"),
       healthInsurance: parseDataNumber(bonus?.data, "healthInsurance"),
       pension: parseDataNumber(bonus?.data, "pension"),
@@ -109,6 +115,9 @@ export function BonusForm({
   });
 
   const baseAmount = watch("baseAmount") || 0;
+  const attendanceAdjustedAmount = watch("attendanceAdjustedAmount");
+  const futureDesignReserveAmount = watch("futureDesignReserveAmount") || 0;
+  const dcPensionContribution = watch("dcPensionContribution") || 0;
   const standardBonusAmount = watch("standardBonusAmount");
   const healthInsurance = watch("healthInsurance");
   const pension = watch("pension");
@@ -126,7 +135,13 @@ export function BonusForm({
   const customStatutoryDeductionTotal = customTotal(statutoryDeductionItems);
   const customDeductionTotal = customTotal(deductionItems);
 
-  const earningSectionTotal = baseAmount + customEarningTotal;
+  const resolvedAttendanceAdjustedAmount = resolveManualNumber(attendanceAdjustedAmount, baseAmount);
+
+  const earningSectionTotal =
+    resolvedAttendanceAdjustedAmount +
+    futureDesignReserveAmount -
+    dcPensionContribution +
+    customEarningTotal;
 
   const grossAmount = earningSectionTotal + customOtherEarningTotal;
 
@@ -199,6 +214,9 @@ export function BonusForm({
         memo: values.memo || undefined,
         data: {
           baseAmount: values.baseAmount,
+          attendanceAdjustedAmount: resolvedAttendanceAdjustedAmount,
+          futureDesignReserveAmount,
+          dcPensionContribution: -dcPensionContribution,
           standardBonusAmount: resolvedStandardBonusAmount,
           healthInsurance: -resolvedHealthInsurance,
           pension: -resolvedPension,
@@ -271,6 +289,54 @@ export function BonusForm({
             )}
           />
           {errors.baseAmount && <p className="text-sm text-destructive">{errors.baseAmount.message}</p>}
+        </div>
+
+        <div className="space-y-1.5">
+          <Label htmlFor="attendanceAdjustedAmount">賞与支給(勤怠減額後)</Label>
+          <Controller
+            control={control}
+            name="attendanceAdjustedAmount"
+            render={({ field }) => (
+              <AmountInput
+                id="attendanceAdjustedAmount"
+                placeholder={String(baseAmount)}
+                value={field.value}
+                onChange={field.onChange}
+              />
+            )}
+          />
+          <AutoCalcHint manualValue={attendanceAdjustedAmount} autoValue={baseAmount} />
+        </div>
+
+        <div className="grid grid-cols-2 gap-4">
+          <div className="space-y-1.5">
+            <Label htmlFor="futureDesignReserveAmount">将来設計準備金基準額</Label>
+            <Controller
+              control={control}
+              name="futureDesignReserveAmount"
+              render={({ field }) => (
+                <AmountInput
+                  id="futureDesignReserveAmount"
+                  value={field.value}
+                  onChange={field.onChange}
+                />
+              )}
+            />
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="dcPensionContribution">(-) 確定拠出年金掛金</Label>
+            <Controller
+              control={control}
+              name="dcPensionContribution"
+              render={({ field }) => (
+                <AmountInput
+                  id="dcPensionContribution"
+                  value={field.value}
+                  onChange={field.onChange}
+                />
+              )}
+            />
+          </div>
         </div>
 
         {earningItems.length > 0 && (
