@@ -1,5 +1,6 @@
 import { requireUserId } from "@/lib/auth-user";
 import { db } from "@/lib/db";
+import { buildEffectiveFrom } from "@/lib/taxSetting";
 import { UpdateTaxSettingSchema } from "@/lib/validators";
 
 type Params = { params: Promise<{ id: string }> };
@@ -18,6 +19,12 @@ export async function PUT(request: Request, { params }: Params) {
   const existing = await db.taxSetting.findFirst({ where: { id, userId } });
   if (!existing) return Response.json({ error: "Not Found" }, { status: 404 });
 
-  const taxSetting = await db.taxSetting.update({ where: { id }, data: parsed.data });
+  const { effectiveYear, effectiveMonth, ...rates } = parsed.data;
+  const data =
+    effectiveYear !== undefined && effectiveMonth !== undefined
+      ? { ...rates, effectiveFrom: buildEffectiveFrom(effectiveYear, effectiveMonth) }
+      : rates;
+
+  const taxSetting = await db.taxSetting.update({ where: { id }, data });
   return Response.json(taxSetting);
 }

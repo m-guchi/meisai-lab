@@ -51,7 +51,7 @@ export type ItemDTO = {
 export type TaxSettingDTO = {
   id: string;
   userId: string;
-  year: number;
+  effectiveFrom: string;
   healthInsuranceRate: string;
   pensionRate: string;
   employmentInsuranceRate: string;

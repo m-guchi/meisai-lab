@@ -12,7 +12,17 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import type { TaxSettingDTO } from "@/types";
 
+const formSchema = CreateTaxSettingSchema.pick({
+  effectiveYear: true,
+  effectiveMonth: true,
+  healthInsuranceRate: true,
+  pensionRate: true,
+  employmentInsuranceRate: true,
+});
+
 type FormValues = {
+  effectiveYear: number;
+  effectiveMonth: number;
   healthInsuranceRate: number;
   pensionRate: number;
   employmentInsuranceRate: number;
@@ -20,32 +30,38 @@ type FormValues = {
 
 export function TaxSettingForm({
   year,
+  month,
   taxSetting,
+  applicableTaxSetting,
 }: {
   year: number;
+  month: number;
   taxSetting: TaxSettingDTO | null;
+  applicableTaxSetting: TaxSettingDTO | null;
 }) {
   const router = useRouter();
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const defaults = taxSetting ?? applicableTaxSetting;
 
   const {
     register,
     handleSubmit,
     formState: { errors },
   } = useForm<FormValues>({
-    resolver: zodResolver(
-      CreateTaxSettingSchema.pick({
-        healthInsuranceRate: true,
-        pensionRate: true,
-        employmentInsuranceRate: true,
-      })
-    ),
-    defaultValues: {
-      healthInsuranceRate: taxSetting ? Number(taxSetting.healthInsuranceRate) : 9.15,
-      pensionRate: taxSetting ? Number(taxSetting.pensionRate) : 9.15,
-      employmentInsuranceRate: taxSetting ? Number(taxSetting.employmentInsuranceRate) : 0.6,
+    resolver: zodResolver(formSchema),
+    values: {
+      effectiveYear: year,
+      effectiveMonth: month,
+      healthInsuranceRate: defaults ? Number(defaults.healthInsuranceRate) : 9.15,
+      pensionRate: defaults ? Number(defaults.pensionRate) : 9.15,
+      employmentInsuranceRate: defaults ? Number(defaults.employmentInsuranceRate) : 0.6,
     },
   });
+
+  function handleDateChange(nextYear: number, nextMonth: number) {
+    router.push(`/settings?year=${nextYear}&month=${nextMonth}`);
+  }
 
   async function onSubmit(values: FormValues) {
     setIsSubmitting(true);
@@ -53,7 +69,7 @@ export function TaxSettingForm({
       const res = await fetch("/api/tax-settings", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ year, ...values }),
+        body: JSON.stringify(values),
       });
       if (!res.ok) {
         toast.error("保存に失敗しました");
@@ -67,7 +83,36 @@ export function TaxSettingForm({
   }
 
   return (
-    <form onSubmit={handleSubmit(onSubmit)} className="max-w-sm space-y-4">
+    <form onSubmit={handleSubmit(onSubmit)} className="max-w-lg space-y-4">
+      <div className="grid grid-cols-2 gap-4 sm:w-64">
+        <div className="space-y-1.5">
+          <Label htmlFor="effectiveYear">適用年</Label>
+          <Input
+            id="effectiveYear"
+            type="number"
+            value={year}
+            onChange={(e) => handleDateChange(Number(e.target.value), month)}
+          />
+        </div>
+        <div className="space-y-1.5">
+          <Label htmlFor="effectiveMonth">適用月</Label>
+          <Input
+            id="effectiveMonth"
+            type="number"
+            min={1}
+            max={12}
+            value={month}
+            onChange={(e) => handleDateChange(year, Number(e.target.value))}
+          />
+        </div>
+      </div>
+
+      {!taxSetting && applicableTaxSetting && (
+        <p className="text-xs text-muted-foreground">
+          {year}年{month}月時点の設定はまだありません。直近で適用されている料率を初期値として表示しています。
+        </p>
+      )}
+
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
         <div className="space-y-1.5">
           <Label htmlFor="healthInsuranceRate">健康保険料率（%）</Label>
@@ -107,7 +152,7 @@ export function TaxSettingForm({
         </div>
       </div>
       <Button type="submit" disabled={isSubmitting}>
-        保存する
+        {taxSetting ? "更新する" : "この年月から適用する"}
       </Button>
     </form>
   );

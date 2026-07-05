@@ -41,7 +41,8 @@ export type CreateItem = z.infer<typeof CreateItemSchema>;
 export const UpdateItemSchema = CreateItemSchema.partial();
 
 export const CreateTaxSettingSchema = z.object({
-  year: z.number().int().min(2000).max(2100),
+  effectiveYear: z.number().int().min(2000).max(2100),
+  effectiveMonth: z.number().int().min(1).max(12),
   healthInsuranceRate: z.number().positive().optional(),
   pensionRate: z.number().positive().optional(),
   employmentInsuranceRate: z.number().positive().optional(),

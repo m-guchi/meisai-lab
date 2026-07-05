@@ -1,5 +1,6 @@
 import { requireUserId } from "@/lib/auth-user";
 import { db } from "@/lib/db";
+import { buildEffectiveFrom, findApplicableTaxSetting } from "@/lib/taxSetting";
 import { CreateTaxSettingSchema } from "@/lib/validators";
 
 export async function GET(request: Request) {
@@ -7,18 +8,16 @@ export async function GET(request: Request) {
   if (!userId) return Response.json({ error: "Unauthorized" }, { status: 401 });
 
   const { searchParams } = new URL(request.url);
-  const year = searchParams.get("year");
+  const date = searchParams.get("date");
 
-  if (year) {
-    const taxSetting = await db.taxSetting.findUnique({
-      where: { userId_year: { userId, year: Number(year) } },
-    });
+  if (date) {
+    const taxSetting = await findApplicableTaxSetting(userId, new Date(date));
     return Response.json(taxSetting);
   }
 
   const taxSettings = await db.taxSetting.findMany({
     where: { userId },
-    orderBy: { year: "desc" },
+    orderBy: { effectiveFrom: "desc" },
   });
   return Response.json(taxSettings);
 }
@@ -33,10 +32,13 @@ export async function POST(request: Request) {
     return Response.json({ error: parsed.error.flatten() }, { status: 400 });
   }
 
+  const { effectiveYear, effectiveMonth, ...rates } = parsed.data;
+  const effectiveFrom = buildEffectiveFrom(effectiveYear, effectiveMonth);
+
   const taxSetting = await db.taxSetting.upsert({
-    where: { userId_year: { userId, year: parsed.data.year } },
-    update: parsed.data,
-    create: { userId, ...parsed.data },
+    where: { userId_effectiveFrom: { userId, effectiveFrom } },
+    update: rates,
+    create: { userId, effectiveFrom, ...rates },
   });
   return Response.json(taxSetting, { status: 201 });
 }

@@ -127,7 +127,7 @@ model TaxSetting {
   userId String
   user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  year                    Int // 2024, 2025 等
+  effectiveFrom           DateTime // 適用開始年月（当該月の1日を保持）
   healthInsuranceRate     Decimal @default(9.15) @db.Decimal(5, 2)
   pensionRate             Decimal @default(9.15) @db.Decimal(5, 2)
   employmentInsuranceRate Decimal @default(0.60) @db.Decimal(5, 2)
@@ -136,7 +136,7 @@ model TaxSetting {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  @@unique([userId, year])
+  @@unique([userId, effectiveFrom])
 }
 
 model Deduction {

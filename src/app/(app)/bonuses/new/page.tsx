@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 
 import { auth } from "@/auth";
 import { db } from "@/lib/db";
+import { findApplicableTaxSetting } from "@/lib/taxSetting";
 import { BonusForm } from "@/components/BonusForm";
 import type { ItemDTO, TaxSettingDTO } from "@/types";
 
@@ -10,9 +11,8 @@ export default async function NewBonusPage() {
   const userId = session?.user?.id;
   if (!userId) redirect("/auth/signin");
 
-  const currentYear = new Date().getFullYear();
   const [taxSetting, items] = await Promise.all([
-    db.taxSetting.findUnique({ where: { userId_year: { userId, year: currentYear } } }),
+    findApplicableTaxSetting(userId, new Date()),
     db.item.findMany({
       where: { userId, isActive: true, scope: { in: ["bonus", "both"] } },
       orderBy: { displayOrder: "asc" },

@@ -3,6 +3,7 @@ import { notFound, redirect } from "next/navigation";
 import { auth } from "@/auth";
 import { db } from "@/lib/db";
 import { buildAnnualTaxData } from "@/lib/annualTaxData";
+import { findApplicableTaxSetting } from "@/lib/taxSetting";
 import { SalaryForm } from "@/components/SalaryForm";
 import type { ItemDTO, SalaryDTO, TaxSettingDTO } from "@/types";
 
@@ -22,7 +23,7 @@ export default async function EditSalaryPage({
   const year = salary.salaryDate.getFullYear();
   const candidateYears = [year - 1, year - 2];
   const [taxSetting, items, previousSalary, annualTaxData] = await Promise.all([
-    db.taxSetting.findUnique({ where: { userId_year: { userId, year } } }),
+    findApplicableTaxSetting(userId, salary.salaryDate),
     db.item.findMany({
       where: { userId, isActive: true, scope: { in: ["salary", "both"] } },
       orderBy: { displayOrder: "asc" },

@@ -2,6 +2,7 @@ import { notFound, redirect } from "next/navigation";
 
 import { auth } from "@/auth";
 import { db } from "@/lib/db";
+import { findApplicableTaxSetting } from "@/lib/taxSetting";
 import { BonusForm } from "@/components/BonusForm";
 import type { BonusDTO, ItemDTO, TaxSettingDTO } from "@/types";
 
@@ -18,9 +19,8 @@ export default async function EditBonusPage({
   const bonus = await db.bonus.findFirst({ where: { id, userId, deletedAt: null } });
   if (!bonus) notFound();
 
-  const year = bonus.bonusDate.getFullYear();
   const [taxSetting, items] = await Promise.all([
-    db.taxSetting.findUnique({ where: { userId_year: { userId, year } } }),
+    findApplicableTaxSetting(userId, bonus.bonusDate),
     db.item.findMany({
       where: { userId, isActive: true, scope: { in: ["bonus", "both"] } },
       orderBy: { displayOrder: "asc" },

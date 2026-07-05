@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { auth } from "@/auth";
 import { db } from "@/lib/db";
 import { buildAnnualTaxData } from "@/lib/annualTaxData";
+import { findApplicableTaxSetting } from "@/lib/taxSetting";
 import { SalaryForm } from "@/components/SalaryForm";
 import type { ItemDTO, TaxSettingDTO } from "@/types";
 
@@ -14,7 +15,7 @@ export default async function NewSalaryPage() {
   const currentYear = new Date().getFullYear();
   const candidateYears = [currentYear - 1, currentYear - 2];
   const [taxSetting, items, previousSalary, annualTaxData] = await Promise.all([
-    db.taxSetting.findUnique({ where: { userId_year: { userId, year: currentYear } } }),
+    findApplicableTaxSetting(userId, new Date()),
     db.item.findMany({
       where: { userId, isActive: true, scope: { in: ["salary", "both"] } },
       orderBy: { displayOrder: "asc" },
