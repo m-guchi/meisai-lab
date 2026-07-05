@@ -280,7 +280,7 @@ export function BonusForm({
 
       {otherEarningItems.length > 0 && (
         <div className="space-y-3 rounded-md border p-3">
-          <p className="text-sm font-medium">その他支給（/items で追加できます）</p>
+          <p className="text-sm font-medium">その他支給</p>
           <div className="grid grid-cols-2 gap-4">
             {otherEarningItems.map((item) => (
               <div key={item.id} className="space-y-1.5">
@@ -298,7 +298,7 @@ export function BonusForm({
 
       {otherTaxableItems.length > 0 && (
         <div className="space-y-3 rounded-md border p-3">
-          <p className="text-sm font-medium">その他(課税処理)（/items で追加できます）</p>
+          <p className="text-sm font-medium">その他(課税処理)</p>
           <p className="text-xs text-muted-foreground">
             支給額には含めず、所得税の課税対象額にのみ加算されます。
           </p>
