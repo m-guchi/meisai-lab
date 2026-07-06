@@ -114,7 +114,7 @@ export default async function TaxReturnPage({
           estimatedSocialInsuranceTotal,
         }) => (
           <Card key={year}>
-            <Collapsible defaultOpen={year === requestedYear} className="contents">
+            <Collapsible defaultOpen={false} className="contents">
               <CollapsibleTrigger className="group flex w-full items-center justify-between text-left">
                 <CardHeader className="flex-1">
                   <CardTitle className="flex items-center gap-2">

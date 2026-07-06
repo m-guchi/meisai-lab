@@ -119,7 +119,7 @@ export function TaxSettingForm({
           <Input
             id="healthInsuranceRate"
             type="number"
-            step="0.01"
+            step="0.0001"
             {...register("healthInsuranceRate", { valueAsNumber: true })}
           />
           {errors.healthInsuranceRate && (
@@ -131,7 +131,7 @@ export function TaxSettingForm({
           <Input
             id="pensionRate"
             type="number"
-            step="0.01"
+            step="0.0001"
             {...register("pensionRate", { valueAsNumber: true })}
           />
           {errors.pensionRate && (
@@ -143,7 +143,7 @@ export function TaxSettingForm({
           <Input
             id="employmentInsuranceRate"
             type="number"
-            step="0.01"
+            step="0.0001"
             {...register("employmentInsuranceRate", { valueAsNumber: true })}
           />
           {errors.employmentInsuranceRate && (

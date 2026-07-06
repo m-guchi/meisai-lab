@@ -28,7 +28,7 @@ export function ChartFrame({
       <div className="relative h-[300px] md:h-[400px]">
         <div
           aria-hidden
-          className="pointer-events-none absolute inset-y-0 left-0 z-10 overflow-hidden bg-card"
+          className="chart-axis-overlay pointer-events-none absolute inset-y-0 left-0 z-10 overflow-hidden bg-card"
           style={{ width: clipWidth }}
         >
           <div className="h-full" style={{ width: AXIS_CHART_WIDTH }}>

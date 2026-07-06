@@ -39,12 +39,17 @@ export const CreateItemSchema = z.object({
 export type CreateItem = z.infer<typeof CreateItemSchema>;
 export const UpdateItemSchema = CreateItemSchema.partial();
 
+const insuranceRateSchema = z
+  .number()
+  .positive()
+  .multipleOf(0.0001, "小数点以下4桁までで入力してください");
+
 export const CreateTaxSettingSchema = z.object({
   effectiveYear: z.number().int().min(2000).max(2100),
   effectiveMonth: z.number().int().min(1).max(12),
-  healthInsuranceRate: z.number().positive().optional(),
-  pensionRate: z.number().positive().optional(),
-  employmentInsuranceRate: z.number().positive().optional(),
+  healthInsuranceRate: insuranceRateSchema.optional(),
+  pensionRate: insuranceRateSchema.optional(),
+  employmentInsuranceRate: insuranceRateSchema.optional(),
   incomeRateTaxFormula: z.string().optional(),
 });
 export type CreateTaxSetting = z.infer<typeof CreateTaxSettingSchema>;

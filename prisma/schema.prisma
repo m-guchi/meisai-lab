@@ -128,9 +128,9 @@ model TaxSetting {
   user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   effectiveFrom           DateTime // 適用開始年月（当該月の1日を保持）
-  healthInsuranceRate     Decimal  @default(9.15) @db.Decimal(5, 2)
-  pensionRate             Decimal  @default(9.15) @db.Decimal(5, 2)
-  employmentInsuranceRate Decimal  @default(0.60) @db.Decimal(5, 2)
+  healthInsuranceRate     Decimal  @default(9.15) @db.Decimal(7, 4)
+  pensionRate             Decimal  @default(9.15) @db.Decimal(7, 4)
+  employmentInsuranceRate Decimal  @default(0.60) @db.Decimal(7, 4)
   incomeRateTaxFormula    String?  @db.Text // Phase 2以降
 
   createdAt DateTime @default(now())
