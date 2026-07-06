@@ -245,7 +245,7 @@ const SECTIONS: { title: string; fields: FieldMeta[] }[] = [
       {
         field: "annualGrossIncome",
         label: "給与",
-        formula: "その年に登録された給与・賞与の支給額の合計(自動集計)",
+        formula: "その年に登録された給与・賞与の支給額の合計から、通勤手当等の非課税支給額を除いたもの(自動集計)",
       },
       {
         field: "employmentIncome",

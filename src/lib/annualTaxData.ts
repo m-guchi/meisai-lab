@@ -30,6 +30,25 @@ function customItemValue(data: unknown, itemId: string): number {
   return typeof value === "number" ? value : 0;
 }
 
+// 通勤手当など、支給額(grossSalary/amount)には含まれるが所得税・住民税の課税対象にはならない項目の金額を合計する
+function nonTaxableEarningFromData(data: unknown, nonTaxableItemIds: Set<string>): number {
+  const d = (data ?? {}) as Record<string, unknown>;
+  const raw = d.customItemValues;
+  if (!raw || typeof raw !== "object") return 0;
+  return Object.entries(raw as Record<string, unknown>).reduce((sum, [itemId, value]) => {
+    if (!nonTaxableItemIds.has(itemId) || typeof value !== "number") return sum;
+    return sum + Math.abs(value);
+  }, 0);
+}
+
+async function getNonTaxableEarningItemIds(userId: string): Promise<Set<string>> {
+  const items = await db.item.findMany({
+    where: { userId, isTaxable: false, itemType: { in: ["earning", "otherEarning"] } },
+    select: { id: true },
+  });
+  return new Set(items.map((item) => item.id));
+}
+
 // 年末調整・賞与の所得税(差額)を項目として手入力している場合、源泉徴収税額の集計から差し引く
 // （どちらも「控除」区分の項目のため保存時に符号が反転しており、差し引くことで実際の源泉徴収額に一致する）
 const INCOME_TAX_ADJUSTMENT_ITEM_NAMES = ["年末調整", "所得税(差額)"];
@@ -41,7 +60,7 @@ export async function getAnnualAggregate(
   const gte = new Date(`${year}-01-01`);
   const lt = new Date(`${year + 1}-01-01`);
 
-  const [salaries, bonuses, adjustmentItems] = await Promise.all([
+  const [salaries, bonuses, adjustmentItems, nonTaxableItemIds] = await Promise.all([
     db.salary.findMany({
       where: { userId, deletedAt: null, salaryDate: { gte, lt } },
       select: { grossSalary: true, data: true },
@@ -54,11 +73,19 @@ export async function getAnnualAggregate(
       where: { userId, itemName: { in: INCOME_TAX_ADJUSTMENT_ITEM_NAMES } },
       select: { id: true },
     }),
+    getNonTaxableEarningItemIds(userId),
   ]);
+
+  // 通勤手当など非課税支給項目は支給額(grossSalary/amount)に含まれるが、
+  // 確定申告の「給与」(収入金額)には含めない
+  const nonTaxableEarningTotal =
+    salaries.reduce((sum, r) => sum + nonTaxableEarningFromData(r.data, nonTaxableItemIds), 0) +
+    bonuses.reduce((sum, r) => sum + nonTaxableEarningFromData(r.data, nonTaxableItemIds), 0);
 
   const grossIncome =
     salaries.reduce((sum, r) => sum + Number(r.grossSalary), 0) +
-    bonuses.reduce((sum, r) => sum + Number(r.amount), 0);
+    bonuses.reduce((sum, r) => sum + Number(r.amount), 0) -
+    nonTaxableEarningTotal;
   const socialInsuranceTotal =
     salaries.reduce((sum, r) => sum + insuranceFromData(r.data), 0) +
     bonuses.reduce((sum, r) => sum + insuranceFromData(r.data), 0);
@@ -89,7 +116,7 @@ export async function getFurusatoNozeiIncomeProjection(
   const prevGte = new Date(`${year - 1}-01-01`);
   const prevLt = new Date(`${year}-01-01`);
 
-  const [salaries, bonuses, prevBonuses] = await Promise.all([
+  const [salaries, bonuses, prevBonuses, nonTaxableItemIds] = await Promise.all([
     db.salary.findMany({
       where: { userId, deletedAt: null, salaryDate: { gte, lt } },
       select: { salaryDate: true, grossSalary: true, data: true },
@@ -103,9 +130,14 @@ export async function getFurusatoNozeiIncomeProjection(
       where: { userId, deletedAt: null, bonusDate: { gte: prevGte, lt: prevLt } },
       select: { bonusDate: true, amount: true, data: true },
     }),
+    getNonTaxableEarningItemIds(userId),
   ]);
 
-  let estimatedSalaryGross = salaries.reduce((sum, s) => sum + Number(s.grossSalary), 0);
+  // 通勤手当など非課税支給項目は支給額(grossSalary/amount)に含まれるが、収入金額の見込みには含めない
+  const taxableGross = (grossSalary: number, data: unknown) =>
+    grossSalary - nonTaxableEarningFromData(data, nonTaxableItemIds);
+
+  let estimatedSalaryGross = salaries.reduce((sum, s) => sum + taxableGross(Number(s.grossSalary), s.data), 0);
   let estimatedSalaryInsurance = salaries.reduce((sum, s) => sum + insuranceFromData(s.data), 0);
 
   const remainingMonths = Math.max(12 - salaries.length, 0);
@@ -115,7 +147,8 @@ export async function getFurusatoNozeiIncomeProjection(
       (s) => numberField(s.data, "baseGrossSalary") === currentBaseSalary
     );
     const avgGross =
-      currentRegime.reduce((sum, s) => sum + Number(s.grossSalary), 0) / currentRegime.length;
+      currentRegime.reduce((sum, s) => sum + taxableGross(Number(s.grossSalary), s.data), 0) /
+      currentRegime.length;
     const avgInsurance =
       currentRegime.reduce((sum, s) => sum + insuranceFromData(s.data), 0) / currentRegime.length;
 
@@ -124,12 +157,12 @@ export async function getFurusatoNozeiIncomeProjection(
   }
 
   const enteredBonusMonths = new Set(bonuses.map((b) => b.bonusDate.getMonth() + 1));
-  let estimatedBonusGross = bonuses.reduce((sum, b) => sum + Number(b.amount), 0);
+  let estimatedBonusGross = bonuses.reduce((sum, b) => sum + taxableGross(Number(b.amount), b.data), 0);
   let estimatedBonusInsurance = bonuses.reduce((sum, b) => sum + insuranceFromData(b.data), 0);
 
   for (const prevBonus of prevBonuses) {
     if (enteredBonusMonths.has(prevBonus.bonusDate.getMonth() + 1)) continue;
-    estimatedBonusGross += Number(prevBonus.amount);
+    estimatedBonusGross += taxableGross(Number(prevBonus.amount), prevBonus.data);
     estimatedBonusInsurance += insuranceFromData(prevBonus.data);
   }
 
