@@ -129,3 +129,9 @@
     @apply font-sans;
   }
 }
+
+/* 固定表示するグラフの縦軸コピーには、原点付近の横軸目盛りが
+   はみ出して見切れてしまうため、横軸の目盛りは表示しない */
+.chart-axis-overlay .recharts-xAxis {
+  display: none;
+}
