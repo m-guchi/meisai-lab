@@ -108,6 +108,7 @@ export function DetailDonutChart({
               outerRadius={58}
               startAngle={90}
               endAngle={-270}
+              stroke="none"
             >
               {earningSlices.map((slice) => (
                 <Cell key={slice.name} fill={slice.color} />
