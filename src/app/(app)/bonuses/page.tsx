@@ -48,7 +48,7 @@ export default async function BonusesPage() {
         </CardContent>
       </Card>
 
-      <BonusesClient bonuses={bonusDtos} />
+      <BonusesClient bonuses={bonusDtos} items={itemDtos} />
     </div>
   );
 }

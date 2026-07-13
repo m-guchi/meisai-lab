@@ -48,7 +48,7 @@ export default async function SalariesPage() {
         </CardContent>
       </Card>
 
-      <SalaryList salaries={salaryDtos} />
+      <SalaryList salaries={salaryDtos} items={itemDtos} />
     </div>
   );
 }

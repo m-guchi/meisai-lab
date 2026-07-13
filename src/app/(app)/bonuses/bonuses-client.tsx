@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { format } from "date-fns";
-import { Loader2, Pencil, Plus, Trash2 } from "lucide-react";
+import { ChevronDown, Loader2, Pencil, Plus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import {
@@ -19,12 +19,25 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import { Card, CardContent } from "@/components/ui/card";
-import type { BonusDTO } from "@/types";
+import { DetailDonutChart } from "@/components/Charts/DetailDonutChart";
+import {
+  buildBonusEarningRow,
+  buildBonusOtherEarningItems,
+  buildDeductionItems,
+  buildDeductionRow,
+  buildStatutoryDeductionItems,
+} from "@/components/Charts/chartData";
+import type { BonusDTO, ItemDTO } from "@/types";
 
-export function BonusesClient({ bonuses: initialBonuses }: { bonuses: BonusDTO[] }) {
+export function BonusesClient({ bonuses: initialBonuses, items }: { bonuses: BonusDTO[]; items: ItemDTO[] }) {
   const router = useRouter();
   const [bonuses, setBonuses] = useState(initialBonuses);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [expandedId, setExpandedId] = useState<string | null>(null);
+
+  function toggleExpanded(id: string) {
+    setExpandedId((prev) => (prev === id ? null : id));
+  }
 
   async function handleDelete(id: string) {
     setDeletingId(id);
@@ -55,17 +68,22 @@ export function BonusesClient({ bonuses: initialBonuses }: { bonuses: BonusDTO[]
 
       <div className="space-y-2">
         {bonuses.map((bonus) => (
-          <Card key={bonus.id}>
+          <Card key={bonus.id} className="cursor-pointer" onClick={() => toggleExpanded(bonus.id)}>
             <CardContent className="flex items-center justify-between gap-2">
-              <div>
-                <p className="font-medium">
-                  {format(new Date(bonus.bonusDate), "yyyy年MM月dd日")}
-                </p>
-                <p className="text-sm text-muted-foreground">
-                  {Number(bonus.amount).toLocaleString()} 円
-                </p>
+              <div className="flex items-center gap-1">
+                <ChevronDown
+                  className={`size-4 shrink-0 text-muted-foreground transition-transform ${expandedId === bonus.id ? "rotate-180" : ""}`}
+                />
+                <div>
+                  <p className="font-medium">
+                    {format(new Date(bonus.bonusDate), "yyyy年MM月dd日")}
+                  </p>
+                  <p className="text-sm text-muted-foreground">
+                    {Number(bonus.amount).toLocaleString()} 円
+                  </p>
+                </div>
               </div>
-              <div className="flex gap-1">
+              <div className="flex gap-1" onClick={(e) => e.stopPropagation()}>
                 <Button asChild variant="ghost" size="icon">
                   <Link href={`/bonuses/${bonus.id}/edit`}>
                     <Pencil className="size-4" />
@@ -108,6 +126,19 @@ export function BonusesClient({ bonuses: initialBonuses }: { bonuses: BonusDTO[]
                 </AlertDialog>
               </div>
             </CardContent>
+            {expandedId === bonus.id && (
+              <CardContent className="pt-0">
+                <DetailDonutChart
+                  earningRow={buildBonusEarningRow(bonus.data, items)}
+                  deductionRow={buildDeductionRow(bonus.data, items)}
+                  earningItemBreakdown={{ その他支給: buildBonusOtherEarningItems(bonus.data, items) }}
+                  deductionItemBreakdown={{
+                    法定控除: buildStatutoryDeductionItems(bonus.data, items),
+                    控除: buildDeductionItems(bonus.data, items),
+                  }}
+                />
+              </CardContent>
+            )}
           </Card>
         ))}
       </div>

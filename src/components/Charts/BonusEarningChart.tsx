@@ -15,7 +15,7 @@ import {
 
 import type { BonusDTO, ItemDTO } from "@/types";
 import { EARNING_COLORS, NET_LINE_COLOR, resolveColor } from "./chartColors";
-import { estimateYAxisWidth, formatAxisTick, numberOf, sumCustomValues } from "./chartData";
+import { buildBonusEarningRow, estimateYAxisWidth, formatAxisTick, numberOf } from "./chartData";
 import { ChartFrame } from "./ChartFrame";
 import { ChartLegend } from "./ChartLegend";
 import { useIsDarkTheme } from "./useIsDarkTheme";
@@ -25,22 +25,16 @@ const EARNING_KEYS = ["賞与支給(勤怠減額後)", "将来設計準備金基
 export function BonusEarningChart({ bonuses, items }: { bonuses: BonusDTO[]; items: ItemDTO[] }) {
   const isDark = useIsDarkTheme();
 
-  const earningItems = useMemo(() => items.filter((item) => item.itemType === "earning"), [items]);
-  const otherEarningItems = useMemo(() => items.filter((item) => item.itemType === "otherEarning"), [items]);
-
   const data = useMemo(
     () =>
       [...bonuses]
         .sort((a, b) => new Date(a.bonusDate).getTime() - new Date(b.bonusDate).getTime())
         .map((bonus) => ({
           date: format(new Date(bonus.bonusDate), "yy/MM"),
-          "賞与支給(勤怠減額後)": numberOf(bonus.data.attendanceAdjustedAmount),
-          将来設計準備金基準額: numberOf(bonus.data.futureDesignReserveAmount),
-          確定拠出年金掛金: numberOf(bonus.data.dcPensionContribution),
-          その他支給: sumCustomValues(bonus.data, earningItems) + sumCustomValues(bonus.data, otherEarningItems),
+          ...buildBonusEarningRow(bonus.data, items),
           手取り額: numberOf(bonus.data.netAmount),
         })),
-    [bonuses, earningItems, otherEarningItems]
+    [bonuses, items]
   );
 
   if (data.length === 0) {

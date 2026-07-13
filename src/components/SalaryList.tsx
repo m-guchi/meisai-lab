@@ -2,9 +2,9 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { Fragment, useState } from "react";
 import { format } from "date-fns";
-import { Loader2, Pencil, Trash2 } from "lucide-react";
+import { ChevronDown, Loader2, Pencil, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
@@ -28,11 +28,24 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import { Card, CardContent } from "@/components/ui/card";
-import type { SalaryDTO } from "@/types";
+import { DetailDonutChart } from "@/components/Charts/DetailDonutChart";
+import {
+  buildDeductionItems,
+  buildDeductionRow,
+  buildSalaryEarningRow,
+  buildSalaryOtherEarningItems,
+  buildStatutoryDeductionItems,
+} from "@/components/Charts/chartData";
+import type { ItemDTO, SalaryDTO } from "@/types";
 
-export function SalaryList({ salaries }: { salaries: SalaryDTO[] }) {
+export function SalaryList({ salaries, items }: { salaries: SalaryDTO[]; items: ItemDTO[] }) {
   const router = useRouter();
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [expandedId, setExpandedId] = useState<string | null>(null);
+
+  function toggleExpanded(id: string) {
+    setExpandedId((prev) => (prev === id ? null : id));
+  }
 
   async function handleDelete(id: string) {
     setDeletingId(id);
@@ -69,28 +82,55 @@ export function SalaryList({ salaries }: { salaries: SalaryDTO[] }) {
           </TableHeader>
           <TableBody>
             {salaries.map((salary) => (
-              <TableRow key={salary.id}>
-                <TableCell>{format(new Date(salary.salaryDate), "yyyy年MM月dd日")}</TableCell>
-                <TableCell className="text-right">
-                  {Number(salary.grossSalary).toLocaleString()} 円
-                </TableCell>
-                <TableCell className="text-right">
-                  {Number(salary.netSalary).toLocaleString()} 円
-                </TableCell>
-                <TableCell>
-                  <div className="flex justify-end gap-1">
-                    <Button asChild variant="ghost" size="icon">
-                      <Link href={`/salaries/${salary.id}/edit`}>
-                        <Pencil className="size-4" />
-                      </Link>
-                    </Button>
-                    <DeleteButton
-                      onConfirm={() => handleDelete(salary.id)}
-                      isDeleting={deletingId === salary.id}
-                    />
-                  </div>
-                </TableCell>
-              </TableRow>
+              <Fragment key={salary.id}>
+                <TableRow
+                  className="cursor-pointer"
+                  onClick={() => toggleExpanded(salary.id)}
+                >
+                  <TableCell>
+                    <div className="flex items-center gap-1">
+                      <ChevronDown
+                        className={`size-4 shrink-0 text-muted-foreground transition-transform ${expandedId === salary.id ? "rotate-180" : ""}`}
+                      />
+                      {format(new Date(salary.salaryDate), "yyyy年MM月dd日")}
+                    </div>
+                  </TableCell>
+                  <TableCell className="text-right">
+                    {Number(salary.grossSalary).toLocaleString()} 円
+                  </TableCell>
+                  <TableCell className="text-right">
+                    {Number(salary.netSalary).toLocaleString()} 円
+                  </TableCell>
+                  <TableCell>
+                    <div className="flex justify-end gap-1" onClick={(e) => e.stopPropagation()}>
+                      <Button asChild variant="ghost" size="icon">
+                        <Link href={`/salaries/${salary.id}/edit`}>
+                          <Pencil className="size-4" />
+                        </Link>
+                      </Button>
+                      <DeleteButton
+                        onConfirm={() => handleDelete(salary.id)}
+                        isDeleting={deletingId === salary.id}
+                      />
+                    </div>
+                  </TableCell>
+                </TableRow>
+                {expandedId === salary.id && (
+                  <TableRow key={`${salary.id}-detail`}>
+                    <TableCell colSpan={4}>
+                      <DetailDonutChart
+                        earningRow={buildSalaryEarningRow(salary.data, items)}
+                        deductionRow={buildDeductionRow(salary.data, items)}
+                        earningItemBreakdown={{ その他支給: buildSalaryOtherEarningItems(salary.data, items) }}
+                        deductionItemBreakdown={{
+                          法定控除: buildStatutoryDeductionItems(salary.data, items),
+                          控除: buildDeductionItems(salary.data, items),
+                        }}
+                      />
+                    </TableCell>
+                  </TableRow>
+                )}
+              </Fragment>
             ))}
           </TableBody>
         </Table>
@@ -98,17 +138,22 @@ export function SalaryList({ salaries }: { salaries: SalaryDTO[] }) {
 
       <div className="space-y-2 md:hidden">
         {salaries.map((salary) => (
-          <Card key={salary.id}>
+          <Card key={salary.id} className="cursor-pointer" onClick={() => toggleExpanded(salary.id)}>
             <CardContent className="flex items-center justify-between gap-2">
-              <div>
-                <p className="font-medium">{format(new Date(salary.salaryDate), "yyyy年MM月dd日")}</p>
-                <p className="text-sm text-muted-foreground">
-                  支給額 {Number(salary.grossSalary).toLocaleString()} 円 / 手取
-                  {" "}
-                  {Number(salary.netSalary).toLocaleString()} 円
-                </p>
+              <div className="flex items-center gap-1">
+                <ChevronDown
+                  className={`size-4 shrink-0 text-muted-foreground transition-transform ${expandedId === salary.id ? "rotate-180" : ""}`}
+                />
+                <div>
+                  <p className="font-medium">{format(new Date(salary.salaryDate), "yyyy年MM月dd日")}</p>
+                  <p className="text-sm text-muted-foreground">
+                    支給額 {Number(salary.grossSalary).toLocaleString()} 円 / 手取
+                    {" "}
+                    {Number(salary.netSalary).toLocaleString()} 円
+                  </p>
+                </div>
               </div>
-              <div className="flex gap-1">
+              <div className="flex gap-1" onClick={(e) => e.stopPropagation()}>
                 <Button asChild variant="ghost" size="icon">
                   <Link href={`/salaries/${salary.id}/edit`}>
                     <Pencil className="size-4" />
@@ -120,6 +165,19 @@ export function SalaryList({ salaries }: { salaries: SalaryDTO[] }) {
                 />
               </div>
             </CardContent>
+            {expandedId === salary.id && (
+              <CardContent className="pt-0">
+                <DetailDonutChart
+                  earningRow={buildSalaryEarningRow(salary.data, items)}
+                  deductionRow={buildDeductionRow(salary.data, items)}
+                  earningItemBreakdown={{ その他支給: buildSalaryOtherEarningItems(salary.data, items) }}
+                  deductionItemBreakdown={{
+                    法定控除: buildStatutoryDeductionItems(salary.data, items),
+                    控除: buildDeductionItems(salary.data, items),
+                  }}
+                />
+              </CardContent>
+            )}
           </Card>
         ))}
       </div>
