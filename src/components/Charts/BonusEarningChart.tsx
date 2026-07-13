@@ -20,7 +20,7 @@ import { ChartFrame } from "./ChartFrame";
 import { ChartLegend } from "./ChartLegend";
 import { useIsDarkTheme } from "./useIsDarkTheme";
 
-const EARNING_KEYS = ["賞与支給(勤怠減額後)", "将来設計準備金基準額", "確定拠出年金掛金", "その他支給"] as const;
+const EARNING_KEYS = ["賞与支給(勤怠減額後)", "将来設計準備金 DC差引後", "その他支給"] as const;
 
 export function BonusEarningChart({ bonuses, items }: { bonuses: BonusDTO[]; items: ItemDTO[] }) {
   const isDark = useIsDarkTheme();

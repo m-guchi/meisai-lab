@@ -121,13 +121,12 @@ export function buildSalaryOtherEarningItems(data: Record<string, unknown>, item
 export function buildBonusEarningRow(
   data: Record<string, unknown>,
   items: ItemDTO[]
-): { "賞与支給(勤怠減額後)": number; 将来設計準備金基準額: number; 確定拠出年金掛金: number; その他支給: number } {
+): { "賞与支給(勤怠減額後)": number; "将来設計準備金 DC差引後": number; その他支給: number } {
   const earningItems = items.filter((item) => item.itemType === "earning");
   const otherEarningItems = items.filter((item) => item.itemType === "otherEarning");
   return {
     "賞与支給(勤怠減額後)": numberOf(data.attendanceAdjustedAmount),
-    将来設計準備金基準額: numberOf(data.futureDesignReserveAmount),
-    確定拠出年金掛金: numberOf(data.dcPensionContribution),
+    "将来設計準備金 DC差引後": numberOf(data.futureDesignReserveAmount) + numberOf(data.dcPensionContribution),
     その他支給: sumCustomValues(data, earningItems) + sumCustomValues(data, otherEarningItems),
   };
 }
@@ -136,4 +135,11 @@ export function buildBonusOtherEarningItems(data: Record<string, unknown>, items
   const earningItems = items.filter((item) => item.itemType === "earning");
   const otherEarningItems = items.filter((item) => item.itemType === "otherEarning");
   return customItemBreakdown(data, [...earningItems, ...otherEarningItems]);
+}
+
+export function buildBonusFutureDesignReserveItems(data: Record<string, unknown>): BreakdownItem[] {
+  return [
+    { name: "将来設計準備金基準額", value: numberOf(data.futureDesignReserveAmount) },
+    { name: "確定拠出年金掛金", value: numberOf(data.dcPensionContribution) },
+  ].filter((item) => item.value !== 0);
 }

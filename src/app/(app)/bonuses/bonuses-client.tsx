@@ -22,6 +22,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { DetailDonutChart } from "@/components/Charts/DetailDonutChart";
 import {
   buildBonusEarningRow,
+  buildBonusFutureDesignReserveItems,
   buildBonusOtherEarningItems,
   buildDeductionItems,
   buildDeductionRow,
@@ -131,7 +132,10 @@ export function BonusesClient({ bonuses: initialBonuses, items }: { bonuses: Bon
                 <DetailDonutChart
                   earningRow={buildBonusEarningRow(bonus.data, items)}
                   deductionRow={buildDeductionRow(bonus.data, items)}
-                  earningItemBreakdown={{ その他支給: buildBonusOtherEarningItems(bonus.data, items) }}
+                  earningItemBreakdown={{
+                    "将来設計準備金 DC差引後": buildBonusFutureDesignReserveItems(bonus.data),
+                    その他支給: buildBonusOtherEarningItems(bonus.data, items),
+                  }}
                   deductionItemBreakdown={{
                     法定控除: buildStatutoryDeductionItems(bonus.data, items),
                     控除: buildDeductionItems(bonus.data, items),
