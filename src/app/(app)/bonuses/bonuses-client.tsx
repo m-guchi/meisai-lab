@@ -122,9 +122,15 @@ export function BonusesClient({
         />
       ) : (
         <div className="space-y-2">
-          {groupBonusesByYear(bonuses).map(({ year, bonuses: yearBonuses }) => {
+          {groupBonusesByYear(bonuses).map(({ year, bonuses: yearBonuses }, index, yearGroups) => {
             const amountTotal = yearBonuses.reduce((sum, b) => sum + Number(b.amount), 0);
             const yearKey = `year-${year}`;
+            const previousYearBonuses = yearGroups[index + 1]?.bonuses;
+            const previousAmountTotal = previousYearBonuses?.reduce((sum, b) => sum + Number(b.amount), 0);
+            const previousNetTotal = previousYearBonuses?.reduce(
+              (sum, b) => sum + Number(b.data.netAmount ?? 0),
+              0
+            );
             return (
               <Card key={year} className="cursor-pointer" onClick={() => toggleExpanded(yearKey)}>
                 <CardContent className="flex items-center justify-between gap-2">
@@ -149,6 +155,13 @@ export function BonusesClient({
                         法定控除: sumBreakdownItems(yearBonuses.map((b) => buildStatutoryDeductionItems(b.data, items))),
                         控除: sumBreakdownItems(yearBonuses.map((b) => buildDeductionItems(b.data, items))),
                       }}
+                      previousEarningTotal={previousAmountTotal}
+                      previousDeductionTotal={
+                        previousAmountTotal !== undefined && previousNetTotal !== undefined
+                          ? previousAmountTotal - previousNetTotal
+                          : undefined
+                      }
+                      comparisonLabel="前年"
                     />
                   </CardContent>
                 )}
@@ -178,89 +191,98 @@ function BonusYearGroup({
 }) {
   return (
     <div className="space-y-2">
-      {bonuses.map((bonus) => (
-        <Card key={bonus.id} className="cursor-pointer" onClick={() => toggleExpanded(bonus.id)}>
-          <CardContent className="flex items-center justify-between gap-2">
-            <div className="flex items-center gap-1">
-              <ChevronDown
-                className={`size-4 shrink-0 text-muted-foreground transition-transform ${expandedId === bonus.id ? "rotate-180" : ""}`}
-              />
-              <div>
-                <p className="font-medium">
-                  {format(new Date(bonus.bonusDate), "yyyy年MM月dd日")}
-                </p>
-                <p className="text-sm text-muted-foreground">
-                  <span className="text-xs">支給額 </span>
-                  {Number(bonus.amount).toLocaleString()}
-                  <span className="text-xs">円</span>
-                  {" / "}
-                  <span className="text-xs">手取額 </span>
-                  {Number(bonus.data.netAmount ?? 0).toLocaleString()}
-                  <span className="text-xs">円</span>
-                </p>
+      {bonuses.map((bonus, index) => {
+        const previousBonus = bonuses[index + 1];
+        return (
+          <Card key={bonus.id} className="cursor-pointer" onClick={() => toggleExpanded(bonus.id)}>
+            <CardContent className="flex items-center justify-between gap-2">
+              <div className="flex items-center gap-1">
+                <ChevronDown
+                  className={`size-4 shrink-0 text-muted-foreground transition-transform ${expandedId === bonus.id ? "rotate-180" : ""}`}
+                />
+                <div>
+                  <p className="font-medium">
+                    {format(new Date(bonus.bonusDate), "yyyy年MM月dd日")}
+                  </p>
+                  <p className="text-sm text-muted-foreground">
+                    <span className="text-xs">支給額 </span>
+                    {Number(bonus.amount).toLocaleString()}
+                    <span className="text-xs">円</span>
+                    {" / "}
+                    <span className="text-xs">手取額 </span>
+                    {Number(bonus.data.netAmount ?? 0).toLocaleString()}
+                    <span className="text-xs">円</span>
+                  </p>
+                </div>
               </div>
-            </div>
-            <div className="flex gap-1" onClick={(e) => e.stopPropagation()}>
-              <Button asChild variant="ghost" size="icon">
-                <Link href={`/bonuses/${bonus.id}/edit`}>
-                  <Pencil className="size-4" />
-                </Link>
-              </Button>
-              <AlertDialog>
-                <AlertDialogTrigger asChild>
-                  <Button variant="ghost" size="icon" disabled={deletingId === bonus.id}>
-                    {deletingId === bonus.id ? (
-                      <Loader2 className="size-4 animate-spin" />
-                    ) : (
-                      <Trash2 className="size-4" />
-                    )}
-                  </Button>
-                </AlertDialogTrigger>
-                <AlertDialogContent>
-                  <AlertDialogHeader>
-                    <AlertDialogTitle>賞与を削除しますか？</AlertDialogTitle>
-                    <AlertDialogDescription>この操作は取り消せません。</AlertDialogDescription>
-                  </AlertDialogHeader>
-                  <AlertDialogFooter>
-                    <AlertDialogCancel disabled={deletingId === bonus.id}>
-                      キャンセル
-                    </AlertDialogCancel>
-                    <AlertDialogAction
-                      onClick={() => handleDelete(bonus.id)}
-                      disabled={deletingId === bonus.id}
-                    >
+              <div className="flex gap-1" onClick={(e) => e.stopPropagation()}>
+                <Button asChild variant="ghost" size="icon">
+                  <Link href={`/bonuses/${bonus.id}/edit`}>
+                    <Pencil className="size-4" />
+                  </Link>
+                </Button>
+                <AlertDialog>
+                  <AlertDialogTrigger asChild>
+                    <Button variant="ghost" size="icon" disabled={deletingId === bonus.id}>
                       {deletingId === bonus.id ? (
-                        <>
-                          <Loader2 className="size-4 animate-spin" />
-                          削除中...
-                        </>
+                        <Loader2 className="size-4 animate-spin" />
                       ) : (
-                        "削除する"
+                        <Trash2 className="size-4" />
                       )}
-                    </AlertDialogAction>
-                  </AlertDialogFooter>
-                </AlertDialogContent>
-              </AlertDialog>
-            </div>
-          </CardContent>
-          {expandedId === bonus.id && (
-            <CardContent className="pt-0" onClick={(e) => e.stopPropagation()}>
-              <DetailDonutChart
-                earningRow={buildBonusEarningRow(bonus.data, items)}
-                deductionRow={buildDeductionRow(bonus.data, items)}
-                earningItemBreakdown={{
-                  "将来設計準備金 DC差引後": buildBonusFutureDesignReserveItems(bonus.data),
-                  その他支給: buildBonusOtherEarningItems(bonus.data, items),
-                }}
-                deductionItemBreakdown={{
-                  法定控除: buildStatutoryDeductionItems(bonus.data, items),
-                  控除: buildDeductionItems(bonus.data, items),
-                }}
-              />
+                    </Button>
+                  </AlertDialogTrigger>
+                  <AlertDialogContent>
+                    <AlertDialogHeader>
+                      <AlertDialogTitle>賞与を削除しますか？</AlertDialogTitle>
+                      <AlertDialogDescription>この操作は取り消せません。</AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                      <AlertDialogCancel disabled={deletingId === bonus.id}>
+                        キャンセル
+                      </AlertDialogCancel>
+                      <AlertDialogAction
+                        onClick={() => handleDelete(bonus.id)}
+                        disabled={deletingId === bonus.id}
+                      >
+                        {deletingId === bonus.id ? (
+                          <>
+                            <Loader2 className="size-4 animate-spin" />
+                            削除中...
+                          </>
+                        ) : (
+                          "削除する"
+                        )}
+                      </AlertDialogAction>
+                    </AlertDialogFooter>
+                  </AlertDialogContent>
+                </AlertDialog>
+              </div>
             </CardContent>
-          )}
-        </Card>
-      ))}
+            {expandedId === bonus.id && (
+              <CardContent className="pt-0" onClick={(e) => e.stopPropagation()}>
+                <DetailDonutChart
+                  earningRow={buildBonusEarningRow(bonus.data, items)}
+                  deductionRow={buildDeductionRow(bonus.data, items)}
+                  earningItemBreakdown={{
+                    "将来設計準備金 DC差引後": buildBonusFutureDesignReserveItems(bonus.data),
+                    その他支給: buildBonusOtherEarningItems(bonus.data, items),
+                  }}
+                  deductionItemBreakdown={{
+                    法定控除: buildStatutoryDeductionItems(bonus.data, items),
+                    控除: buildDeductionItems(bonus.data, items),
+                  }}
+                  previousEarningTotal={previousBonus ? Number(previousBonus.amount) : undefined}
+                  previousDeductionTotal={
+                    previousBonus
+                      ? Number(previousBonus.amount) - Number(previousBonus.data.netAmount ?? 0)
+                      : undefined
+                  }
+                />
+              </CardContent>
+            )}
+          </Card>
+        );
+      })}
     </div>
   );
 }

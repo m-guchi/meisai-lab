@@ -7,7 +7,20 @@ import { DEDUCTION_COLORS, EARNING_COLORS, resolveColor } from "./chartColors";
 import { useIsDarkTheme } from "./useIsDarkTheme";
 
 type Slice = { name: string; value: number; color: string };
-type ListSlice = Slice & { dividerBefore?: boolean };
+type ListSlice = Slice & { dividerBefore?: boolean; diff?: number };
+
+function formatDiff(diff: number): string {
+  if (diff === 0) return "±0円";
+  return `${diff > 0 ? "+" : ""}${diff.toLocaleString()}円`;
+}
+
+function DiffLabel({ diff, label }: { diff: number; label: string }) {
+  return (
+    <span className="ml-1 text-xs font-normal text-muted-foreground">
+      ({label}比 {formatDiff(diff)})
+    </span>
+  );
+}
 
 // 元のカテゴリ順で色を割り当ててからゼロ値を除外する。
 // こうすることで、同じカテゴリは他の画面のグラフと常に同じ色になる。
@@ -24,9 +37,11 @@ function toSlices(
 function CategoryList({
   slices,
   itemBreakdown,
+  comparisonLabel,
 }: {
   slices: ListSlice[];
   itemBreakdown?: Record<string, BreakdownItem[]>;
+  comparisonLabel: string;
 }) {
   return (
     <ul className="space-y-1.5 text-sm">
@@ -51,6 +66,11 @@ function CategoryList({
                 ))}
               </ul>
             )}
+            {slice.diff !== undefined && (
+              <div className="flex justify-end">
+                <DiffLabel diff={slice.diff} label={comparisonLabel} />
+              </div>
+            )}
           </li>
         );
       })}
@@ -63,11 +83,17 @@ export function DetailDonutChart({
   deductionRow,
   earningItemBreakdown,
   deductionItemBreakdown,
+  previousEarningTotal,
+  previousDeductionTotal,
+  comparisonLabel = "前月",
 }: {
   earningRow: Record<string, number>;
   deductionRow: Record<string, number>;
   earningItemBreakdown?: Record<string, BreakdownItem[]>;
   deductionItemBreakdown?: Record<string, BreakdownItem[]>;
+  previousEarningTotal?: number;
+  previousDeductionTotal?: number;
+  comparisonLabel?: string;
 }) {
   const isDark = useIsDarkTheme();
   const earningSlices = toSlices(earningRow, EARNING_COLORS, isDark);
@@ -79,12 +105,24 @@ export function DetailDonutChart({
   const grossTotal = earningSlices.reduce((sum, slice) => sum + slice.value, 0);
   const deductionTotal = deductionSlices.reduce((sum, slice) => sum + slice.value, 0);
   const netAmount = grossTotal - deductionTotal;
+  const previousNetAmount =
+    previousEarningTotal !== undefined && previousDeductionTotal !== undefined
+      ? previousEarningTotal - previousDeductionTotal
+      : undefined;
   const netSlice: Slice = { name: "手取り額", value: netAmount, color: "transparent" };
   const outerSlices: Slice[] = [...deductionSlices, ...(netAmount > 0 ? [netSlice] : [])];
 
   const deductionListSlices: ListSlice[] = [
     ...deductionSlices,
-    ...(netAmount > 0 ? [{ ...netSlice, dividerBefore: true }] : []),
+    ...(netAmount > 0
+      ? [
+          {
+            ...netSlice,
+            dividerBefore: true,
+            diff: previousNetAmount !== undefined ? netAmount - previousNetAmount : undefined,
+          },
+        ]
+      : []),
   ];
 
   if (earningSlices.length === 0 && outerSlices.length === 0) {
@@ -136,16 +174,26 @@ export function DetailDonutChart({
         <div>
           <div className="mb-1.5 flex items-center justify-between gap-2 border-b pb-1.5 text-sm font-semibold">
             <span>支給合計</span>
-            <span>{grossTotal.toLocaleString()} 円</span>
+            <span>
+              {grossTotal.toLocaleString()} 円
+              {previousEarningTotal !== undefined && (
+                <DiffLabel diff={grossTotal - previousEarningTotal} label={comparisonLabel} />
+              )}
+            </span>
           </div>
-          <CategoryList slices={earningSlices} itemBreakdown={earningItemBreakdown} />
+          <CategoryList slices={earningSlices} itemBreakdown={earningItemBreakdown} comparisonLabel={comparisonLabel} />
         </div>
         <div>
           <div className="mb-1.5 flex items-center justify-between gap-2 border-b pb-1.5 text-sm font-semibold">
             <span>控除合計</span>
-            <span>{deductionTotal.toLocaleString()} 円</span>
+            <span>
+              {deductionTotal.toLocaleString()} 円
+              {previousDeductionTotal !== undefined && (
+                <DiffLabel diff={deductionTotal - previousDeductionTotal} label={comparisonLabel} />
+              )}
+            </span>
           </div>
-          <CategoryList slices={deductionListSlices} itemBreakdown={deductionItemBreakdown} />
+          <CategoryList slices={deductionListSlices} itemBreakdown={deductionItemBreakdown} comparisonLabel={comparisonLabel} />
         </div>
       </div>
     </div>
