@@ -19,7 +19,6 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { DetailDonutChart } from "@/components/Charts/DetailDonutChart";
 import { BonusEarningChart } from "@/components/Charts/BonusEarningChart";
 import { BonusDeductionChart } from "@/components/Charts/BonusDeductionChart";
@@ -31,6 +30,8 @@ import {
   buildDeductionItems,
   buildDeductionRow,
   buildStatutoryDeductionItems,
+  sumBreakdownItems,
+  sumRecords,
   type ChartViewMode,
 } from "@/components/Charts/chartData";
 import type { BonusDTO, ItemDTO } from "@/types";
@@ -79,8 +80,6 @@ export function BonusesClient({
     }
   }
 
-  const rowsProps = { items, expandedId, toggleExpanded, deletingId, handleDelete };
-
   return (
     <div className="space-y-4">
       <ChartViewModeToggle value={viewMode} onChange={setViewMode} />
@@ -113,27 +112,46 @@ export function BonusesClient({
       </div>
 
       {viewMode === "monthly" ? (
-        <BonusYearGroup bonuses={bonuses} {...rowsProps} />
+        <BonusYearGroup
+          bonuses={bonuses}
+          items={items}
+          expandedId={expandedId}
+          toggleExpanded={toggleExpanded}
+          deletingId={deletingId}
+          handleDelete={handleDelete}
+        />
       ) : (
-        <div className="space-y-4">
+        <div className="space-y-2">
           {groupBonusesByYear(bonuses).map(({ year, bonuses: yearBonuses }) => {
             const amountTotal = yearBonuses.reduce((sum, b) => sum + Number(b.amount), 0);
+            const yearKey = `year-${year}`;
             return (
-              <Card key={year}>
-                <Collapsible defaultOpen={false} className="contents">
-                  <CollapsibleTrigger className="group flex w-full items-center justify-between text-left">
-                    <CardHeader className="flex-1">
-                      <CardTitle className="flex items-center gap-2">{year}年</CardTitle>
-                      <p className="text-sm text-muted-foreground">支給額合計 {amountTotal.toLocaleString()} 円</p>
-                    </CardHeader>
-                    <ChevronDown className="mr-6 size-4 shrink-0 text-muted-foreground transition-transform group-data-[state=open]:rotate-180" />
-                  </CollapsibleTrigger>
-                  <CollapsibleContent>
-                    <CardContent className="space-y-2">
-                      <BonusYearGroup bonuses={yearBonuses} {...rowsProps} />
-                    </CardContent>
-                  </CollapsibleContent>
-                </Collapsible>
+              <Card key={year} className="cursor-pointer" onClick={() => toggleExpanded(yearKey)}>
+                <CardContent className="flex items-center justify-between gap-2">
+                  <div className="flex items-center gap-1">
+                    <ChevronDown
+                      className={`size-4 shrink-0 text-muted-foreground transition-transform ${expandedId === yearKey ? "rotate-180" : ""}`}
+                    />
+                    <p className="font-medium">{year}年</p>
+                  </div>
+                  <p className="text-sm text-muted-foreground">支給額合計 {amountTotal.toLocaleString()} 円</p>
+                </CardContent>
+                {expandedId === yearKey && (
+                  <CardContent className="pt-0" onClick={(e) => e.stopPropagation()}>
+                    <DetailDonutChart
+                      earningRow={sumRecords(yearBonuses.map((b) => buildBonusEarningRow(b.data, items)))}
+                      deductionRow={sumRecords(yearBonuses.map((b) => buildDeductionRow(b.data, items)))}
+                      earningItemBreakdown={{
+                        "将来設計準備金 DC差引後": sumBreakdownItems(yearBonuses.map((b) => buildBonusFutureDesignReserveItems(b.data))),
+                        その他支給: sumBreakdownItems(yearBonuses.map((b) => buildBonusOtherEarningItems(b.data, items))),
+                      }}
+                      deductionItemBreakdown={{
+                        法定控除: sumBreakdownItems(yearBonuses.map((b) => buildStatutoryDeductionItems(b.data, items))),
+                        控除: sumBreakdownItems(yearBonuses.map((b) => buildDeductionItems(b.data, items))),
+                      }}
+                    />
+                  </CardContent>
+                )}
               </Card>
             );
           })}
@@ -226,7 +244,7 @@ function BonusYearGroup({
             </div>
           </CardContent>
           {expandedId === bonus.id && (
-            <CardContent className="pt-0">
+            <CardContent className="pt-0" onClick={(e) => e.stopPropagation()}>
               <DetailDonutChart
                 earningRow={buildBonusEarningRow(bonus.data, items)}
                 deductionRow={buildDeductionRow(bonus.data, items)}

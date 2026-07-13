@@ -166,3 +166,24 @@ export function buildBonusFutureDesignReserveItems(data: Record<string, unknown>
     { name: "確定拠出年金掛金", value: numberOf(data.dcPensionContribution) },
   ].filter((item) => item.value !== 0);
 }
+
+// 年別の内訳表示では、月ごとの内訳を1年分合算してから表示する。
+export function sumRecords<T extends Record<string, number>>(rows: T[]): T {
+  const sum = {} as T;
+  for (const row of rows) {
+    for (const key of Object.keys(row) as (keyof T)[]) {
+      sum[key] = ((sum[key] ?? 0) + row[key]) as T[keyof T];
+    }
+  }
+  return sum;
+}
+
+export function sumBreakdownItems(lists: BreakdownItem[][]): BreakdownItem[] {
+  const totals = new Map<string, number>();
+  for (const list of lists) {
+    for (const item of list) {
+      totals.set(item.name, (totals.get(item.name) ?? 0) + item.value);
+    }
+  }
+  return [...totals.entries()].map(([name, value]) => ({ name, value }));
+}

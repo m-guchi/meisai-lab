@@ -27,8 +27,7 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+import { Card, CardContent } from "@/components/ui/card";
 import { DetailDonutChart } from "@/components/Charts/DetailDonutChart";
 import {
   buildDeductionItems,
@@ -36,6 +35,8 @@ import {
   buildSalaryEarningRow,
   buildSalaryOtherEarningItems,
   buildStatutoryDeductionItems,
+  sumBreakdownItems,
+  sumRecords,
   type ChartViewMode,
 } from "@/components/Charts/chartData";
 import type { ItemDTO, SalaryDTO } from "@/types";
@@ -83,8 +84,6 @@ export function SalaryList({
     }
   }
 
-  const rowsProps = { items, expandedId, toggleExpanded, deletingId, handleDelete };
-
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-end gap-2">
@@ -94,30 +93,48 @@ export function SalaryList({
       </div>
 
       {viewMode === "monthly" ? (
-        <SalaryYearGroup salaries={salaries} {...rowsProps} />
+        <SalaryYearGroup
+          salaries={salaries}
+          items={items}
+          expandedId={expandedId}
+          toggleExpanded={toggleExpanded}
+          deletingId={deletingId}
+          handleDelete={handleDelete}
+        />
       ) : (
-        <div className="space-y-4">
+        <div className="space-y-2">
           {groupSalariesByYear(salaries).map(({ year, salaries: yearSalaries }) => {
             const grossTotal = yearSalaries.reduce((sum, s) => sum + Number(s.grossSalary), 0);
             const netTotal = yearSalaries.reduce((sum, s) => sum + Number(s.netSalary), 0);
+            const yearKey = `year-${year}`;
             return (
-              <Card key={year}>
-                <Collapsible defaultOpen={false} className="contents">
-                  <CollapsibleTrigger className="group flex w-full items-center justify-between text-left">
-                    <CardHeader className="flex-1">
-                      <CardTitle className="flex items-center gap-2">{year}年</CardTitle>
-                      <p className="text-sm text-muted-foreground">
-                        支給額合計 {grossTotal.toLocaleString()} 円 / 手取合計 {netTotal.toLocaleString()} 円
-                      </p>
-                    </CardHeader>
-                    <ChevronDown className="mr-6 size-4 shrink-0 text-muted-foreground transition-transform group-data-[state=open]:rotate-180" />
-                  </CollapsibleTrigger>
-                  <CollapsibleContent>
-                    <CardContent>
-                      <SalaryYearGroup salaries={yearSalaries} {...rowsProps} />
-                    </CardContent>
-                  </CollapsibleContent>
-                </Collapsible>
+              <Card key={year} className="cursor-pointer" onClick={() => toggleExpanded(yearKey)}>
+                <CardContent className="flex items-center justify-between gap-2">
+                  <div className="flex items-center gap-1">
+                    <ChevronDown
+                      className={`size-4 shrink-0 text-muted-foreground transition-transform ${expandedId === yearKey ? "rotate-180" : ""}`}
+                    />
+                    <p className="font-medium">{year}年</p>
+                  </div>
+                  <p className="text-sm text-muted-foreground">
+                    支給額合計 {grossTotal.toLocaleString()} 円 / 手取合計 {netTotal.toLocaleString()} 円
+                  </p>
+                </CardContent>
+                {expandedId === yearKey && (
+                  <CardContent className="pt-0" onClick={(e) => e.stopPropagation()}>
+                    <DetailDonutChart
+                      earningRow={sumRecords(yearSalaries.map((s) => buildSalaryEarningRow(s.data, items)))}
+                      deductionRow={sumRecords(yearSalaries.map((s) => buildDeductionRow(s.data, items)))}
+                      earningItemBreakdown={{
+                        その他支給: sumBreakdownItems(yearSalaries.map((s) => buildSalaryOtherEarningItems(s.data, items))),
+                      }}
+                      deductionItemBreakdown={{
+                        法定控除: sumBreakdownItems(yearSalaries.map((s) => buildStatutoryDeductionItems(s.data, items))),
+                        控除: sumBreakdownItems(yearSalaries.map((s) => buildDeductionItems(s.data, items))),
+                      }}
+                    />
+                  </CardContent>
+                )}
               </Card>
             );
           })}
@@ -244,7 +261,7 @@ function SalaryYearGroup({
               </div>
             </CardContent>
             {expandedId === salary.id && (
-              <CardContent className="pt-0">
+              <CardContent className="pt-0" onClick={(e) => e.stopPropagation()}>
                 <DetailDonutChart
                   earningRow={buildSalaryEarningRow(salary.data, items)}
                   deductionRow={buildDeductionRow(salary.data, items)}
