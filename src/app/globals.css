@@ -135,3 +135,9 @@
 .chart-axis-overlay .recharts-xAxis {
   display: none;
 }
+
+/* 円グラフはキーボード操作用に tabIndex が付与されており、
+   クリックすると不要なフォーカス枠が表示されてしまうため非表示にする */
+.recharts-pie:focus {
+  outline: none;
+}
