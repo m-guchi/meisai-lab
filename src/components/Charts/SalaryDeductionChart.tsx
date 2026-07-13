@@ -6,26 +6,42 @@ import { Bar, BarChart, CartesianGrid, ResponsiveContainer, XAxis, YAxis } from 
 
 import type { ItemDTO, SalaryDTO } from "@/types";
 import { DEDUCTION_COLORS, resolveColor } from "./chartColors";
-import { buildDeductionRow, estimateYAxisWidth, formatAxisTick } from "./chartData";
+import { buildDeductionRow, estimateYAxisWidth, formatAxisTick, groupRowsByYear, type ChartViewMode } from "./chartData";
 import { ChartFrame } from "./ChartFrame";
 import { ChartLegend } from "./ChartLegend";
 import { useIsDarkTheme } from "./useIsDarkTheme";
 
 const DEDUCTION_KEYS = ["法定控除", "控除"] as const;
 
-export function SalaryDeductionChart({ salaries, items }: { salaries: SalaryDTO[]; items: ItemDTO[] }) {
+export function SalaryDeductionChart({
+  salaries,
+  items,
+  viewMode,
+}: {
+  salaries: SalaryDTO[];
+  items: ItemDTO[];
+  viewMode: ChartViewMode;
+}) {
   const isDark = useIsDarkTheme();
 
-  const data = useMemo(
+  const rows = useMemo(
     () =>
       [...salaries]
         .sort((a, b) => new Date(a.salaryDate).getTime() - new Date(b.salaryDate).getTime())
         .map((salary) => ({
-          date: format(new Date(salary.salaryDate), "yy/MM"),
-          ...buildDeductionRow(salary.data, items),
+          date: new Date(salary.salaryDate),
+          values: buildDeductionRow(salary.data, items),
         })),
     [salaries, items]
   );
+
+  const data = useMemo(() => {
+    const groupedRows = viewMode === "yearly" ? groupRowsByYear(rows) : rows;
+    return groupedRows.map((row) => ({
+      date: format(row.date, viewMode === "yearly" ? "yyyy" : "yy/MM"),
+      ...row.values,
+    }));
+  }, [rows, viewMode]);
 
   if (data.length === 0) {
     return (

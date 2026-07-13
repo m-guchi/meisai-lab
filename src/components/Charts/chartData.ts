@@ -137,6 +137,29 @@ export function buildBonusOtherEarningItems(data: Record<string, unknown>, items
   return customItemBreakdown(data, [...earningItems, ...otherEarningItems]);
 }
 
+export type ChartViewMode = "monthly" | "yearly";
+
+export type ChartRow<T extends Record<string, number>> = { date: Date; values: T };
+
+// 年別表示では、同じ年のデータを合算して年ごとの値にする。
+export function groupRowsByYear<T extends Record<string, number>>(rows: ChartRow<T>[]): ChartRow<T>[] {
+  const summed = new Map<number, T>();
+  for (const row of rows) {
+    const year = row.date.getFullYear();
+    const existing = summed.get(year);
+    if (!existing) {
+      summed.set(year, { ...row.values });
+      continue;
+    }
+    for (const key of Object.keys(row.values) as (keyof T)[]) {
+      existing[key] = (existing[key] + row.values[key]) as T[keyof T];
+    }
+  }
+  return [...summed.entries()]
+    .sort(([a], [b]) => a - b)
+    .map(([year, values]) => ({ date: new Date(year, 0, 1), values }));
+}
+
 export function buildBonusFutureDesignReserveItems(data: Record<string, unknown>): BreakdownItem[] {
   return [
     { name: "将来設計準備金基準額", value: numberOf(data.futureDesignReserveAmount) },

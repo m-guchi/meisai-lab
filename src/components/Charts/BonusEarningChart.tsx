@@ -15,27 +15,49 @@ import {
 
 import type { BonusDTO, ItemDTO } from "@/types";
 import { EARNING_COLORS, NET_LINE_COLOR, resolveColor } from "./chartColors";
-import { buildBonusEarningRow, estimateYAxisWidth, formatAxisTick, numberOf } from "./chartData";
+import {
+  buildBonusEarningRow,
+  estimateYAxisWidth,
+  formatAxisTick,
+  groupRowsByYear,
+  numberOf,
+  type ChartViewMode,
+} from "./chartData";
 import { ChartFrame } from "./ChartFrame";
 import { ChartLegend } from "./ChartLegend";
 import { useIsDarkTheme } from "./useIsDarkTheme";
 
 const EARNING_KEYS = ["賞与支給(勤怠減額後)", "将来設計準備金 DC差引後", "その他支給"] as const;
 
-export function BonusEarningChart({ bonuses, items }: { bonuses: BonusDTO[]; items: ItemDTO[] }) {
+export function BonusEarningChart({
+  bonuses,
+  items,
+  viewMode,
+}: {
+  bonuses: BonusDTO[];
+  items: ItemDTO[];
+  viewMode: ChartViewMode;
+}) {
   const isDark = useIsDarkTheme();
 
-  const data = useMemo(
+  const rows = useMemo(
     () =>
       [...bonuses]
         .sort((a, b) => new Date(a.bonusDate).getTime() - new Date(b.bonusDate).getTime())
         .map((bonus) => ({
-          date: format(new Date(bonus.bonusDate), "yy/MM"),
-          ...buildBonusEarningRow(bonus.data, items),
-          手取り額: numberOf(bonus.data.netAmount),
+          date: new Date(bonus.bonusDate),
+          values: { ...buildBonusEarningRow(bonus.data, items), 手取り額: numberOf(bonus.data.netAmount) },
         })),
     [bonuses, items]
   );
+
+  const data = useMemo(() => {
+    const groupedRows = viewMode === "yearly" ? groupRowsByYear(rows) : rows;
+    return groupedRows.map((row) => ({
+      date: format(row.date, viewMode === "yearly" ? "yyyy" : "yy/MM"),
+      ...row.values,
+    }));
+  }, [rows, viewMode]);
 
   if (data.length === 0) {
     return (

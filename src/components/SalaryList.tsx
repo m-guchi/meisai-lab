@@ -27,7 +27,8 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
-import { Card, CardContent } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { DetailDonutChart } from "@/components/Charts/DetailDonutChart";
 import {
   buildDeductionItems,
@@ -35,10 +36,30 @@ import {
   buildSalaryEarningRow,
   buildSalaryOtherEarningItems,
   buildStatutoryDeductionItems,
+  type ChartViewMode,
 } from "@/components/Charts/chartData";
 import type { ItemDTO, SalaryDTO } from "@/types";
 
-export function SalaryList({ salaries, items }: { salaries: SalaryDTO[]; items: ItemDTO[] }) {
+function groupSalariesByYear(salaries: SalaryDTO[]): { year: number; salaries: SalaryDTO[] }[] {
+  const byYear = new Map<number, SalaryDTO[]>();
+  for (const salary of salaries) {
+    const year = new Date(salary.salaryDate).getFullYear();
+    const group = byYear.get(year) ?? [];
+    group.push(salary);
+    byYear.set(year, group);
+  }
+  return [...byYear.entries()].sort(([a], [b]) => b - a).map(([year, salaries]) => ({ year, salaries }));
+}
+
+export function SalaryList({
+  salaries,
+  items,
+  viewMode,
+}: {
+  salaries: SalaryDTO[];
+  items: ItemDTO[];
+  viewMode: ChartViewMode;
+}) {
   const router = useRouter();
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [expandedId, setExpandedId] = useState<string | null>(null);
@@ -62,6 +83,8 @@ export function SalaryList({ salaries, items }: { salaries: SalaryDTO[]; items: 
     }
   }
 
+  const rowsProps = { items, expandedId, toggleExpanded, deletingId, handleDelete };
+
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-end gap-2">
@@ -70,6 +93,57 @@ export function SalaryList({ salaries, items }: { salaries: SalaryDTO[]; items: 
         </Button>
       </div>
 
+      {viewMode === "monthly" ? (
+        <SalaryYearGroup salaries={salaries} {...rowsProps} />
+      ) : (
+        <div className="space-y-4">
+          {groupSalariesByYear(salaries).map(({ year, salaries: yearSalaries }) => {
+            const grossTotal = yearSalaries.reduce((sum, s) => sum + Number(s.grossSalary), 0);
+            const netTotal = yearSalaries.reduce((sum, s) => sum + Number(s.netSalary), 0);
+            return (
+              <Card key={year}>
+                <Collapsible defaultOpen={false} className="contents">
+                  <CollapsibleTrigger className="group flex w-full items-center justify-between text-left">
+                    <CardHeader className="flex-1">
+                      <CardTitle className="flex items-center gap-2">{year}年</CardTitle>
+                      <p className="text-sm text-muted-foreground">
+                        支給額合計 {grossTotal.toLocaleString()} 円 / 手取合計 {netTotal.toLocaleString()} 円
+                      </p>
+                    </CardHeader>
+                    <ChevronDown className="mr-6 size-4 shrink-0 text-muted-foreground transition-transform group-data-[state=open]:rotate-180" />
+                  </CollapsibleTrigger>
+                  <CollapsibleContent>
+                    <CardContent>
+                      <SalaryYearGroup salaries={yearSalaries} {...rowsProps} />
+                    </CardContent>
+                  </CollapsibleContent>
+                </Collapsible>
+              </Card>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function SalaryYearGroup({
+  salaries,
+  items,
+  expandedId,
+  toggleExpanded,
+  deletingId,
+  handleDelete,
+}: {
+  salaries: SalaryDTO[];
+  items: ItemDTO[];
+  expandedId: string | null;
+  toggleExpanded: (id: string) => void;
+  deletingId: string | null;
+  handleDelete: (id: string) => void;
+}) {
+  return (
+    <>
       <div className="hidden md:block">
         <Table>
           <TableHeader>
@@ -181,7 +255,7 @@ export function SalaryList({ salaries, items }: { salaries: SalaryDTO[]; items: 
           </Card>
         ))}
       </div>
-    </div>
+    </>
   );
 }
 
