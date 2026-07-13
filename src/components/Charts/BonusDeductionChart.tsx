@@ -6,26 +6,42 @@ import { Bar, BarChart, CartesianGrid, ResponsiveContainer, XAxis, YAxis } from 
 
 import type { BonusDTO, ItemDTO } from "@/types";
 import { DEDUCTION_COLORS, resolveColor } from "./chartColors";
-import { buildDeductionRow, estimateYAxisWidth, formatAxisTick } from "./chartData";
+import { buildDeductionRow, estimateYAxisWidth, formatAxisTick, groupRowsByYear, type ChartViewMode } from "./chartData";
 import { ChartFrame } from "./ChartFrame";
 import { ChartLegend } from "./ChartLegend";
 import { useIsDarkTheme } from "./useIsDarkTheme";
 
 const DEDUCTION_KEYS = ["法定控除", "控除"] as const;
 
-export function BonusDeductionChart({ bonuses, items }: { bonuses: BonusDTO[]; items: ItemDTO[] }) {
+export function BonusDeductionChart({
+  bonuses,
+  items,
+  viewMode,
+}: {
+  bonuses: BonusDTO[];
+  items: ItemDTO[];
+  viewMode: ChartViewMode;
+}) {
   const isDark = useIsDarkTheme();
 
-  const data = useMemo(
+  const rows = useMemo(
     () =>
       [...bonuses]
         .sort((a, b) => new Date(a.bonusDate).getTime() - new Date(b.bonusDate).getTime())
         .map((bonus) => ({
-          date: format(new Date(bonus.bonusDate), "yy/MM"),
-          ...buildDeductionRow(bonus.data, items),
+          date: new Date(bonus.bonusDate),
+          values: buildDeductionRow(bonus.data, items),
         })),
     [bonuses, items]
   );
+
+  const data = useMemo(() => {
+    const groupedRows = viewMode === "yearly" ? groupRowsByYear(rows) : rows;
+    return groupedRows.map((row) => ({
+      date: format(row.date, viewMode === "yearly" ? "yyyy" : "yy/MM"),
+      ...row.values,
+    }));
+  }, [rows, viewMode]);
 
   if (data.length === 0) {
     return (

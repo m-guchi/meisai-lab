@@ -2,10 +2,7 @@ import { redirect } from "next/navigation";
 
 import { auth } from "@/auth";
 import { db } from "@/lib/db";
-import { SalaryList } from "@/components/SalaryList";
-import { SalaryEarningChart } from "@/components/Charts/SalaryEarningChart";
-import { SalaryDeductionChart } from "@/components/Charts/SalaryDeductionChart";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { SalariesClient } from "./salaries-client";
 import type { ItemDTO, SalaryDTO } from "@/types";
 
 export default async function SalariesPage() {
@@ -30,25 +27,7 @@ export default async function SalariesPage() {
     <div className="space-y-4">
       <h1 className="text-2xl font-semibold">給与一覧</h1>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>支給額の推移</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <SalaryEarningChart salaries={salaryDtos} items={itemDtos} />
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader>
-          <CardTitle>控除の内訳</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <SalaryDeductionChart salaries={salaryDtos} items={itemDtos} />
-        </CardContent>
-      </Card>
-
-      <SalaryList salaries={salaryDtos} />
+      <SalariesClient salaries={salaryDtos} items={itemDtos} />
     </div>
   );
 }

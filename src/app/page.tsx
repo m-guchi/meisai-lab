@@ -1,6 +1,6 @@
-import Link from "next/link";
-import { ArrowRight, LineChart, Wallet } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { LineChart, Wallet } from "lucide-react";
+import { signInWithGoogleAction } from "@/app/actions/auth";
+import { HomeSignInButton } from "./home-signin-button";
 
 export default function Home() {
   return (
@@ -19,12 +19,9 @@ export default function Home() {
         給与・賞与の記録と可視化をシンプルに。Googleアカウントでログインして始めましょう。
       </p>
 
-      <Button asChild size="lg" className="mt-8 rounded-full px-6">
-        <Link href="/auth/signin">
-          Googleでログイン
-          <ArrowRight className="size-4" />
-        </Link>
-      </Button>
+      <form action={signInWithGoogleAction.bind(null, undefined)}>
+        <HomeSignInButton />
+      </form>
 
       <div className="mt-16 flex items-center gap-2 text-xs text-muted-foreground">
         <LineChart className="size-4" />

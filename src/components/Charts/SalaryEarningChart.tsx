@@ -14,45 +14,42 @@ import {
 
 import type { ItemDTO, SalaryDTO } from "@/types";
 import { EARNING_COLORS, NET_LINE_COLOR, resolveColor } from "./chartColors";
-import { customValue, estimateYAxisWidth, formatAxisTick, numberOf, sumCustomValues } from "./chartData";
+import { buildSalaryEarningRow, estimateYAxisWidth, formatAxisTick, groupRowsByYear, type ChartViewMode } from "./chartData";
 import { ChartFrame } from "./ChartFrame";
 import { ChartLegend } from "./ChartLegend";
 import { useIsDarkTheme } from "./useIsDarkTheme";
 
 const EARNING_KEYS = ["本給", "超勤手当", "通勤手当", "その他支給"] as const;
 
-export function SalaryEarningChart({ salaries, items }: { salaries: SalaryDTO[]; items: ItemDTO[] }) {
+export function SalaryEarningChart({
+  salaries,
+  items,
+  viewMode,
+}: {
+  salaries: SalaryDTO[];
+  items: ItemDTO[];
+  viewMode: ChartViewMode;
+}) {
   const isDark = useIsDarkTheme();
 
-  const commuteItem = useMemo(
-    () => items.find((item) => item.itemType === "earning" && item.itemName === "通勤手当"),
-    [items]
-  );
-  const otherEarningItems = useMemo(
-    () => items.filter((item) => item.itemType === "earning" && item.id !== commuteItem?.id),
-    [items, commuteItem]
-  );
-  const otherEarningOnlyItems = useMemo(
-    () => items.filter((item) => item.itemType === "otherEarning"),
-    [items]
-  );
-
-  const data = useMemo(
+  const rows = useMemo(
     () =>
       [...salaries]
         .sort((a, b) => new Date(a.salaryDate).getTime() - new Date(b.salaryDate).getTime())
         .map((salary) => ({
-          date: format(new Date(salary.salaryDate), "yy/MM"),
-          本給: numberOf(salary.data.baseGrossSalary),
-          超勤手当: numberOf(salary.data.overtime),
-          通勤手当: commuteItem ? customValue(salary.data, commuteItem.id) : 0,
-          その他支給:
-            sumCustomValues(salary.data, otherEarningItems) +
-            sumCustomValues(salary.data, otherEarningOnlyItems),
-          手取り額: Number(salary.netSalary),
+          date: new Date(salary.salaryDate),
+          values: { ...buildSalaryEarningRow(salary.data, items), 手取り額: Number(salary.netSalary) },
         })),
-    [salaries, commuteItem, otherEarningItems, otherEarningOnlyItems]
+    [salaries, items]
   );
+
+  const data = useMemo(() => {
+    const groupedRows = viewMode === "yearly" ? groupRowsByYear(rows) : rows;
+    return groupedRows.map((row) => ({
+      date: format(row.date, viewMode === "yearly" ? "yyyy" : "yy/MM"),
+      ...row.values,
+    }));
+  }, [rows, viewMode]);
 
   if (data.length === 0) {
     return (

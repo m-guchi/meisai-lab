@@ -62,8 +62,10 @@ function extractCustomItemValues(data: Record<string, unknown> | undefined): Rec
 
 function initialCustomValues(
   data: Record<string, unknown> | undefined,
-  previousData: Record<string, unknown> | undefined
+  previousData: Record<string, unknown> | undefined,
+  isEditing: boolean
 ): Record<string, number> {
+  if (isEditing) return extractCustomItemValues(data);
   return { ...extractCustomItemValues(previousData), ...extractCustomItemValues(data) };
 }
 
@@ -87,9 +89,10 @@ export function SalaryForm({
   annualTaxData?: Record<number, AnnualTaxEntry>;
 }) {
   const router = useRouter();
+  const isEditing = Boolean(salary);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [customValues, setCustomValues] = useState<Record<string, number>>(() =>
-    initialCustomValues(salary?.data, previousSalaryData)
+    initialCustomValues(salary?.data, previousSalaryData, isEditing)
   );
 
   const earningItems = items.filter((item) => item.itemType === "earning");
@@ -114,12 +117,12 @@ export function SalaryForm({
       salaryDate: salary ? toDateInputValue(salary.salaryDate) : toDateInputValue(new Date().toISOString()),
       baseSalary:
         parseDataNumber(salary?.data, "baseGrossSalary") ??
-        parseDataNumber(previousSalaryData, "baseGrossSalary"),
+        (isEditing ? undefined : parseDataNumber(previousSalaryData, "baseGrossSalary")),
       overtimeHours: parseDataNumber(salary?.data, "overtimeHours") ?? 0,
       overtimeAmount: parseDataNumber(salary?.data, "overtime"),
       standardMonthlyRemuneration:
         parseDataNumber(salary?.data, "standardMonthlyRemuneration") ??
-        previousStandardMonthlyRemuneration ??
+        (isEditing ? undefined : previousStandardMonthlyRemuneration) ??
         0,
       healthInsurance: parseAbsDataNumber(salary?.data, "healthInsurance"),
       pension: parseAbsDataNumber(salary?.data, "pension"),
@@ -593,6 +596,12 @@ export function SalaryForm({
         <div className="flex justify-between">
           <span>支給額</span>
           <span className="font-medium">{grossSalary.toLocaleString()} 円</span>
+        </div>
+        <div className="flex justify-between">
+          <span>控除合計</span>
+          <span className="font-medium">
+            {(statutoryDeductionSectionTotal + deductionSectionTotal).toLocaleString()} 円
+          </span>
         </div>
         <div className="flex justify-between">
           <span>手取額</span>
