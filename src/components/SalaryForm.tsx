@@ -598,6 +598,12 @@ export function SalaryForm({
           <span className="font-medium">{grossSalary.toLocaleString()} 円</span>
         </div>
         <div className="flex justify-between">
+          <span>控除合計</span>
+          <span className="font-medium">
+            {(statutoryDeductionSectionTotal + deductionSectionTotal).toLocaleString()} 円
+          </span>
+        </div>
+        <div className="flex justify-between">
           <span>手取額</span>
           <span className="font-medium">{netSalary.toLocaleString()} 円</span>
         </div>
