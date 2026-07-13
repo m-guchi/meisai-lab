@@ -172,7 +172,13 @@ function BonusYearGroup({
                   {format(new Date(bonus.bonusDate), "yyyy年MM月dd日")}
                 </p>
                 <p className="text-sm text-muted-foreground">
-                  {Number(bonus.amount).toLocaleString()} 円
+                  <span className="text-xs">支給額 </span>
+                  {Number(bonus.amount).toLocaleString()}
+                  <span className="text-xs">円</span>
+                  {" / "}
+                  <span className="text-xs">手取額 </span>
+                  {Number(bonus.data.netAmount ?? 0).toLocaleString()}
+                  <span className="text-xs">円</span>
                 </p>
               </div>
             </div>

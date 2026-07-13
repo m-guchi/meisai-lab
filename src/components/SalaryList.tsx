@@ -221,9 +221,13 @@ function SalaryYearGroup({
                 <div>
                   <p className="font-medium">{format(new Date(salary.salaryDate), "yyyy年MM月dd日")}</p>
                   <p className="text-sm text-muted-foreground">
-                    支給額 {Number(salary.grossSalary).toLocaleString()} 円 / 手取
-                    {" "}
-                    {Number(salary.netSalary).toLocaleString()} 円
+                    <span className="text-xs">支給額 </span>
+                    {Number(salary.grossSalary).toLocaleString()}
+                    <span className="text-xs">円</span>
+                    {" / "}
+                    <span className="text-xs">手取額 </span>
+                    {Number(salary.netSalary).toLocaleString()}
+                    <span className="text-xs">円</span>
                   </p>
                 </div>
               </div>
