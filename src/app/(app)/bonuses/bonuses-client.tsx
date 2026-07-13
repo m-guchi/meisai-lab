@@ -124,6 +124,7 @@ export function BonusesClient({
         <div className="space-y-2">
           {groupBonusesByYear(bonuses).map(({ year, bonuses: yearBonuses }, index, yearGroups) => {
             const amountTotal = yearBonuses.reduce((sum, b) => sum + Number(b.amount), 0);
+            const netTotal = yearBonuses.reduce((sum, b) => sum + Number(b.data.netAmount ?? 0), 0);
             const yearKey = `year-${year}`;
             const previousYearBonuses = yearGroups[index + 1]?.bonuses;
             const previousAmountTotal = previousYearBonuses?.reduce((sum, b) => sum + Number(b.amount), 0);
@@ -140,7 +141,15 @@ export function BonusesClient({
                     />
                     <p className="font-medium">{year}年</p>
                   </div>
-                  <p className="text-sm text-muted-foreground">支給額合計 {amountTotal.toLocaleString()} 円</p>
+                  <p className="text-sm text-muted-foreground">
+                    <span className="text-xs">支給額 </span>
+                    {amountTotal.toLocaleString()}
+                    <span className="text-xs">円</span>
+                    {" / "}
+                    <span className="text-xs">手取額 </span>
+                    {netTotal.toLocaleString()}
+                    <span className="text-xs">円</span>
+                  </p>
                 </CardContent>
                 {expandedId === yearKey && (
                   <CardContent className="pt-0" onClick={(e) => e.stopPropagation()}>
