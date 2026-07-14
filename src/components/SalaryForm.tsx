@@ -50,23 +50,34 @@ function parseAbsDataNumber(data: Record<string, unknown> | undefined, key: stri
   return value === undefined ? undefined : Math.abs(value);
 }
 
-function extractCustomItemValues(data: Record<string, unknown> | undefined): Record<string, number> {
+// 控除系項目(deduction/statutoryDeduction)は常にマイナスでDB保存されるため、
+// フォーム表示用に符号を戻す。それ以外(otherEarning等)は正負どちらもあり得る値なので符号を保持する。
+function extractCustomItemValues(
+  data: Record<string, unknown> | undefined,
+  items: ItemDTO[]
+): Record<string, number> {
   const raw = data?.customItemValues;
   if (!raw || typeof raw !== "object") return {};
+  const itemTypeById = new Map(items.map((item) => [item.id, item.itemType]));
   return Object.fromEntries(
     Object.entries(raw as Record<string, unknown>)
       .filter((entry): entry is [string, number] => typeof entry[1] === "number")
-      .map(([id, value]) => [id, Math.abs(value)])
+      .map(([id, value]) => {
+        const itemType = itemTypeById.get(id);
+        const isDeductionLike = itemType === "deduction" || itemType === "statutoryDeduction";
+        return [id, isDeductionLike ? Math.abs(value) : value];
+      })
   );
 }
 
 function initialCustomValues(
   data: Record<string, unknown> | undefined,
   previousData: Record<string, unknown> | undefined,
-  isEditing: boolean
+  isEditing: boolean,
+  items: ItemDTO[]
 ): Record<string, number> {
-  if (isEditing) return extractCustomItemValues(data);
-  return { ...extractCustomItemValues(previousData), ...extractCustomItemValues(data) };
+  if (isEditing) return extractCustomItemValues(data, items);
+  return { ...extractCustomItemValues(previousData, items), ...extractCustomItemValues(data, items) };
 }
 
 function toDateInputValue(iso: string): string {
@@ -92,7 +103,7 @@ export function SalaryForm({
   const isEditing = Boolean(salary);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [customValues, setCustomValues] = useState<Record<string, number>>(() =>
-    initialCustomValues(salary?.data, previousSalaryData, isEditing)
+    initialCustomValues(salary?.data, previousSalaryData, isEditing, items)
   );
 
   const earningItems = items.filter((item) => item.itemType === "earning");
