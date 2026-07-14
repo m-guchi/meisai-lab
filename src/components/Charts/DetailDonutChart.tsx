@@ -166,7 +166,10 @@ export function DetailDonutChart({
                 <Cell key={slice.name} fill={slice.color} />
               ))}
             </Pie>
-            <Tooltip formatter={(value) => `${Number(value).toLocaleString()} 円`} />
+            <Tooltip
+              formatter={(value) => `${Number(value).toLocaleString()} 円`}
+              itemStyle={{ color: undefined }}
+            />
           </PieChart>
         </ResponsiveContainer>
       </div>
