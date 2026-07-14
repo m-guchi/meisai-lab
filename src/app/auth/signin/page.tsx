@@ -1,5 +1,7 @@
+import { redirect } from "next/navigation";
 import { Wallet } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { auth } from "@/auth";
 import { signInWithGoogleAction } from "@/app/actions/auth";
 import { SignInButton } from "./sign-in-button";
 
@@ -9,6 +11,14 @@ export default async function SignInPage({
   searchParams: Promise<{ callbackUrl?: string }>;
 }) {
   const { callbackUrl } = await searchParams;
+
+  const session = await auth();
+  if (session?.user?.id) {
+    // callbackUrl は外部ドメインへ誘導するオープンリダイレクトに悪用され得るため、
+    // サイト内の相対パスであることを確認してから使う
+    const isSafeCallbackUrl = callbackUrl && callbackUrl.startsWith("/") && !callbackUrl.startsWith("//");
+    redirect(isSafeCallbackUrl ? callbackUrl : "/salaries");
+  }
 
   return (
     <div className="flex flex-1 flex-col items-center justify-center px-6">

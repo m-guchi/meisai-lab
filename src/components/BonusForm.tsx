@@ -48,13 +48,23 @@ function parseAbsDataNumber(data: Record<string, unknown> | undefined, key: stri
   return value === undefined ? undefined : Math.abs(value);
 }
 
-function initialCustomValues(data: Record<string, unknown> | undefined): Record<string, number> {
+// 控除系項目(deduction/statutoryDeduction)は常にマイナスでDB保存されるため、
+// フォーム表示用に符号を戻す。それ以外(otherEarning等)は正負どちらもあり得る値なので符号を保持する。
+function initialCustomValues(
+  data: Record<string, unknown> | undefined,
+  items: ItemDTO[]
+): Record<string, number> {
   const raw = data?.customItemValues;
   if (!raw || typeof raw !== "object") return {};
+  const itemTypeById = new Map(items.map((item) => [item.id, item.itemType]));
   return Object.fromEntries(
     Object.entries(raw as Record<string, unknown>)
       .filter((entry): entry is [string, number] => typeof entry[1] === "number")
-      .map(([id, value]) => [id, Math.abs(value)])
+      .map(([id, value]) => {
+        const itemType = itemTypeById.get(id);
+        const isDeductionLike = itemType === "deduction" || itemType === "statutoryDeduction";
+        return [id, isDeductionLike ? Math.abs(value) : value];
+      })
   );
 }
 
@@ -76,7 +86,7 @@ export function BonusForm({
   const router = useRouter();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [customValues, setCustomValues] = useState<Record<string, number>>(() =>
-    initialCustomValues(bonus?.data)
+    initialCustomValues(bonus?.data, items)
   );
 
   const earningItems = items.filter((item) => item.itemType === "earning");

@@ -1,6 +1,6 @@
 "use client";
 
-import { Cell, Pie, PieChart, ResponsiveContainer, Tooltip } from "recharts";
+import { Cell, Pie, PieChart, ResponsiveContainer } from "recharts";
 
 import type { BreakdownItem } from "./chartData";
 import { DEDUCTION_COLORS, EARNING_COLORS, resolveColor } from "./chartColors";
@@ -166,7 +166,6 @@ export function DetailDonutChart({
                 <Cell key={slice.name} fill={slice.color} />
               ))}
             </Pie>
-            <Tooltip formatter={(value) => `${Number(value).toLocaleString()} 円`} />
           </PieChart>
         </ResponsiveContainer>
       </div>

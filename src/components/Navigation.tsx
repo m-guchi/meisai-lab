@@ -56,7 +56,7 @@ export function Navigation() {
         </div>
       </header>
 
-      <nav className="fixed inset-x-0 bottom-0 z-40 flex h-[74px] items-center border-t bg-background/95 py-1 backdrop-blur-md md:hidden">
+      <nav className="fixed inset-x-0 bottom-0 z-40 flex h-[74px] transform-gpu items-center border-t bg-background/95 py-1 backdrop-blur-md md:hidden">
         {navItems.map(({ href, label, icon: Icon }) => {
           const active = pathname.startsWith(href);
           return (

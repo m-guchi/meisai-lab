@@ -65,10 +65,19 @@ function fixedKeyBreakdown(
     .filter((item) => item.value > 0);
 }
 
-function customItemBreakdown(data: Record<string, unknown>, items: ItemDTO[]): BreakdownItem[] {
+// 控除系の内訳は常にマイナス値のため、絶対値にして正の金額として表示する。
+// 支給系の内訳(その他支給等)は精算項目のようにマイナス値もあり得るため、符号を保持する。
+function customItemBreakdown(
+  data: Record<string, unknown>,
+  items: ItemDTO[],
+  { absolute = true }: { absolute?: boolean } = {}
+): BreakdownItem[] {
   return items
-    .map((item) => ({ name: item.itemName, value: Math.abs(customValue(data, item.id)) }))
-    .filter((item) => item.value > 0);
+    .map((item) => {
+      const raw = customValue(data, item.id);
+      return { name: item.itemName, value: absolute ? Math.abs(raw) : raw };
+    })
+    .filter((item) => item.value !== 0);
 }
 
 export function buildDeductionRow(
@@ -115,7 +124,7 @@ export function buildSalaryOtherEarningItems(data: Record<string, unknown>, item
   const commuteItem = items.find((item) => item.itemType === "earning" && item.itemName === "通勤手当");
   const otherEarningItems = items.filter((item) => item.itemType === "earning" && item.id !== commuteItem?.id);
   const otherEarningOnlyItems = items.filter((item) => item.itemType === "otherEarning");
-  return customItemBreakdown(data, [...otherEarningItems, ...otherEarningOnlyItems]);
+  return customItemBreakdown(data, [...otherEarningItems, ...otherEarningOnlyItems], { absolute: false });
 }
 
 export function buildBonusEarningRow(
@@ -134,7 +143,7 @@ export function buildBonusEarningRow(
 export function buildBonusOtherEarningItems(data: Record<string, unknown>, items: ItemDTO[]): BreakdownItem[] {
   const earningItems = items.filter((item) => item.itemType === "earning");
   const otherEarningItems = items.filter((item) => item.itemType === "otherEarning");
-  return customItemBreakdown(data, [...earningItems, ...otherEarningItems]);
+  return customItemBreakdown(data, [...earningItems, ...otherEarningItems], { absolute: false });
 }
 
 export type ChartViewMode = "monthly" | "yearly";
