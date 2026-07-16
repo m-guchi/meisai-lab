@@ -21,6 +21,14 @@ export interface ChangelogEntry {
  */
 export const APP_CHANGELOG: ChangelogEntry[] = [
   {
+    version: "1.0.2",
+    date: "2026-07-16",
+    changes: [
+      "アプリを起動した際、ログイン済みでも毎回ログイン画面が表示されてしまう不具合を修正",
+      "年末調整の所得税(差額)を編集する際、追加徴収・還付の符号が反転して保存されてしまう不具合を修正",
+    ],
+  },
+  {
     version: "1.0.1",
     date: "2026-07-14",
     changes: [
