@@ -1,5 +1,6 @@
 // サーバー専用（`db` に依存する唯一の lib ファイル）。クライアントコンポーネントから import しないこと。
 import { db } from "@/lib/db";
+import { INCOME_TAX_ADJUSTMENT_ITEM_NAMES } from "@/lib/annualTax";
 import type { ResidentTaxBreakdownField, ResidentTaxOverrides } from "@/lib/annualTax";
 
 function sumAbsField(data: unknown, field: string): number {
@@ -50,8 +51,7 @@ async function getNonTaxableEarningItemIds(userId: string): Promise<Set<string>>
 }
 
 // 年末調整・賞与の所得税(差額)を項目として手入力している場合、源泉徴収税額の集計から差し引く
-// （どちらも「控除」区分の項目のため保存時に符号が反転しており、差し引くことで実際の源泉徴収額に一致する）
-const INCOME_TAX_ADJUSTMENT_ITEM_NAMES = ["年末調整", "所得税(差額)"];
+// （追加徴収ならマイナス、還付ならプラスで保存されているため、差し引くことで実際の源泉徴収額に一致する）
 
 export async function getAnnualAggregate(
   userId: string,

@@ -13,6 +13,7 @@ import {
   calculateStandardBonusAmount,
   calculateStatutoryInsurance,
 } from "@/lib/calculations";
+import { INCOME_TAX_ADJUSTMENT_ITEM_NAMES } from "@/lib/annualTax";
 import { resolveManualNumber } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -50,19 +51,22 @@ function parseAbsDataNumber(data: Record<string, unknown> | undefined, key: stri
 
 // 控除系項目(deduction/statutoryDeduction)は常にマイナスでDB保存されるため、
 // フォーム表示用に符号を戻す。それ以外(otherEarning等)は正負どちらもあり得る値なので符号を保持する。
+// 年末調整・所得税(差額)項目は控除系でも追加徴収/還付の両方があり得るため、符号を保持する。
 function initialCustomValues(
   data: Record<string, unknown> | undefined,
   items: ItemDTO[]
 ): Record<string, number> {
   const raw = data?.customItemValues;
   if (!raw || typeof raw !== "object") return {};
-  const itemTypeById = new Map(items.map((item) => [item.id, item.itemType]));
+  const itemById = new Map(items.map((item) => [item.id, item]));
   return Object.fromEntries(
     Object.entries(raw as Record<string, unknown>)
       .filter((entry): entry is [string, number] => typeof entry[1] === "number")
       .map(([id, value]) => {
-        const itemType = itemTypeById.get(id);
-        const isDeductionLike = itemType === "deduction" || itemType === "statutoryDeduction";
+        const item = itemById.get(id);
+        const isDeductionLike =
+          (item?.itemType === "deduction" || item?.itemType === "statutoryDeduction") &&
+          !INCOME_TAX_ADJUSTMENT_ITEM_NAMES.includes(item.itemName);
         return [id, isDeductionLike ? Math.abs(value) : value];
       })
   );
@@ -227,7 +231,8 @@ export function BonusForm({
           .map((item) => {
             const amount = customValues[item.id] || 0;
             const isDeductionLike =
-              item.itemType === "deduction" || item.itemType === "statutoryDeduction";
+              (item.itemType === "deduction" || item.itemType === "statutoryDeduction") &&
+              !INCOME_TAX_ADJUSTMENT_ITEM_NAMES.includes(item.itemName);
             return [item.id, isDeductionLike ? -amount : amount] as const;
           })
           .filter(([, amount]) => amount !== 0)

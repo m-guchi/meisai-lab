@@ -1,3 +1,4 @@
+import { INCOME_TAX_ADJUSTMENT_ITEM_NAMES } from "@/lib/annualTax";
 import type { ItemDTO } from "@/types";
 
 export function numberOf(value: unknown): number {
@@ -67,6 +68,7 @@ function fixedKeyBreakdown(
 
 // 控除系の内訳は常にマイナス値のため、絶対値にして正の金額として表示する。
 // 支給系の内訳(その他支給等)は精算項目のようにマイナス値もあり得るため、符号を保持する。
+// 年末調整・所得税(差額)項目は控除系でも追加徴収/還付の両方があり得るため、符号を保持する。
 function customItemBreakdown(
   data: Record<string, unknown>,
   items: ItemDTO[],
@@ -75,7 +77,8 @@ function customItemBreakdown(
   return items
     .map((item) => {
       const raw = customValue(data, item.id);
-      return { name: item.itemName, value: absolute ? Math.abs(raw) : raw };
+      const useAbsolute = absolute && !INCOME_TAX_ADJUSTMENT_ITEM_NAMES.includes(item.itemName);
+      return { name: item.itemName, value: useAbsolute ? Math.abs(raw) : raw };
     })
     .filter((item) => item.value !== 0);
 }

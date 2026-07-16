@@ -1,8 +1,15 @@
+import { redirect } from "next/navigation";
 import { LineChart, Wallet } from "lucide-react";
+import { auth } from "@/auth";
 import { signInWithGoogleAction } from "@/app/actions/auth";
 import { HomeSignInButton } from "./home-signin-button";
 
-export default function Home() {
+export default async function Home() {
+  const session = await auth();
+  if (session?.user?.id) {
+    redirect("/salaries");
+  }
+
   return (
     <div className="relative flex flex-1 flex-col items-center justify-center overflow-hidden px-6 py-24 text-center">
       <div

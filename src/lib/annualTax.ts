@@ -9,6 +9,10 @@
 // 計算過程の各ステップは実際の申告書・課税決定通知書の金額で上書きできるようにしており（`overrides`）、
 // 上書きした値は下流のステップにも反映される（例: 給与所得を上書きすると基礎控除以降も再計算される）。
 
+// 年末調整・賞与の所得税(差額)項目は、他の控除項目と異なり追加徴収(マイナス)・還付(プラス)の
+// どちらもあり得るため、フォーム入力・保存時に符号を保持する必要がある特別な項目として扱う。
+export const INCOME_TAX_ADJUSTMENT_ITEM_NAMES = ["年末調整", "所得税(差額)"];
+
 export function getResidentTaxAssessmentYear(salaryDate: Date): number {
   const month = salaryDate.getMonth() + 1;
   const year = salaryDate.getFullYear();
